@@ -1,0 +1,162 @@
+using System.IO;
+using System.Runtime.InteropServices;
+using System.Text.Json;
+using System.Windows;
+using System.Windows.Input;
+using System.Windows.Interop;
+using System.Windows.Threading;
+
+namespace WarDogs;
+public record BindingSetting(string Action,string Keys);
+public class Preferences
+{
+    public Session Session{get;set;}=new();
+    public Dictionary<string,string> Keys{get;set;}=new(){{"origin","Ctrl+Alt+1"},{"target","Ctrl+Alt+2"},{"pause","Ctrl+Alt+P"},{"hud","Ctrl+Alt+H"},{"mode","Ctrl+Alt+M"},{"map","Ctrl+Alt+G"}};
+    public double HudLeft{get;set;}=double.NaN;public double HudTop{get;set;}=80;
+    public double HudOpacity{get;set;}=1;
+    public string HudForm{get;set;}="panel";
+    public double HudScale{get;set;}=1;
+}
+public class Controller
+{
+    public static readonly string Root=AppContext.BaseDirectory;
+    public static readonly string UserDir=Path.Combine(Root,"UserData");
+    public static readonly JsonSerializerOptions Json=new(){PropertyNamingPolicy=JsonNamingPolicy.CamelCase,WriteIndented=true};
+    public static readonly Dictionary<string,string> Actions=new(){{"origin","炮位设置"},{"target","目标选定"},{"pause","停止 / 恢复"},{"hud","隐藏 / 显示 HUD"},{"mode","模式切换"},{"map","地图切换"}};
+    public Session State{get;private set;}
+    public Ballistics Calculator{get;}
+    public MainWindow Main=null!;public HudWindow Hud=null!;
+    public Preferences Pref{get;}
+    public bool Demo{get;}
+    public bool Dragging{get;set;}
+    public Coord? Pending{get;private set;}
+    Awaiting pendingRole;
+    public List<string> Notices{get;}=new();
+    public event Action? Updated;
+    IntPtr handle;HwndSource? source;Dictionary<int,string> hotkeys=new();int nextId=100;
+    readonly Dictionary<string,(uint Mod,uint Key)> registered=new();
+    int requestRevision=0;uint lastSequence;bool closing;
+    public bool IsClosing=>closing;
+    public bool IsRecordingHotkey{get;set;}
+    public event Action<string>? HotkeyRecorded;
+    DispatcherTimer saveTimer=new(){Interval=TimeSpan.FromMilliseconds(700)};
+    public Controller(bool demo)
+    {
+        Demo=demo;Pref=new();
+        if(!demo)try{var path=Path.Combine(UserDir,"settings.json");if(File.Exists(path))Pref=JsonSerializer.Deserialize<Preferences>(File.ReadAllText(path),Json)??new();}catch{Notices.Add("设置读取失败 · 使用默认值");}
+        State=Pref.Session;
+        if(!Enum.IsDefined(State.Mode))State.Mode=InputMode.Smart;
+        if(State.Map!="bakurani"&&State.Map!="ozeti")State.Map="bakurani";
+        if(State.Weapon!="mortar"&&State.Weapon!="spg")State.Weapon="mortar";
+        foreach(var id in new[]{"bakurani","ozeti"})if(!State.Maps.ContainsKey(id))State.Maps[id]=new();
+        Calculator=new(Path.Combine(Root,"Data","weapons.json"));
+        State.Notice+=Notify;State.Changed+=Refresh;
+        saveTimer.Tick+=(s,e)=>{saveTimer.Stop();Save();};
+        if(demo){State.SetOrigin(new(80.52,69.85),"演示");State.SetTarget(new(82.92,71.65),"演示");}
+        Notify(demo?"演示数据 · 未监听剪贴板，正式启动即可使用":"已就绪 · 设置炮位开始使用");
+    }
+    public Solution? Result=>State.Current.Origin is {} o&&State.Current.Target is {} t?Calculator.Solve(o,t,State.Weapon):null;
+    public void Notify(string message)
+    {
+        if(Notices.Count==0||!Notices[0].EndsWith(message))Notices.Insert(0,$"{DateTime.Now:HH:mm:ss}  {message}");
+        if(Notices.Count>20)Notices.RemoveRange(20,Notices.Count-20);
+        Updated?.Invoke();
+    }
+    public void Refresh(){Updated?.Invoke();saveTimer.Stop();saveTimer.Start();}
+    public void Save()
+    {
+        if(Demo)return;
+        try{Directory.CreateDirectory(UserDir);if(Hud!=null){Pref.HudLeft=Hud.Left;Pref.HudTop=Hud.Top;}
+            var options=new JsonSerializerOptions(Json){NumberHandling=System.Text.Json.Serialization.JsonNumberHandling.AllowNamedFloatingPointLiterals};
+            var path=Path.Combine(UserDir,"settings.json");File.WriteAllText(path+".tmp",JsonSerializer.Serialize(Pref,options));File.Move(path+".tmp",path,true);
+        }catch{Notify("设置暂未保存 · 请检查目录是否可写");}
+    }
+    public void InitializeNative(Window window)
+    {
+        handle=new WindowInteropHelper(window).Handle;source=HwndSource.FromHwnd(handle);source.AddHook(WndProc);
+        lastSequence=GetClipboardSequenceNumber();
+        if(!Demo&&!AddClipboardFormatListener(handle))Notify("剪贴板监听未启动 · 可使用手动输入");
+        foreach(var action in Actions.Keys)Bind(action,Pref.Keys.GetValueOrDefault(action,""),false);
+    }
+    public async void Act(string action)
+    {
+        requestRevision++;
+        switch(action)
+        {
+            case "origin":
+                if(State.Waiting==Awaiting.Origin){State.OriginAction(null);return;}
+                var o=await ReadClipboard(requestRevision);if(o.Current)State.OriginAction(o.Coord);break;
+            case "target":var t=await ReadClipboard(requestRevision);if(t.Current)State.TargetAction(t.Coord);break;
+            case "pause":State.TogglePause();break;
+            case "hud":if(Hud.IsVisible)Hud.Hide();else Hud.Show();Notify(Hud.IsVisible?"HUD 已显示":"HUD 已隐藏 · 可从主窗口恢复");break;
+            case "mode":State.ChangeMode();Pending=null;break;
+            case "map":State.ChangeMap();Pending=null;break;
+            case "weapon":State.ChangeWeapon();break;
+            case "bubble":Hud.SetForm("bubble");break;
+            case "compact":Hud.SetForm("compact");break;
+            case "pending":if(Pending is {} p){Pending=null;if(pendingRole==Awaiting.Origin)State.SetOrigin(p);else State.SetTarget(p);Refresh();}break;
+            case "discard":Pending=null;Refresh();break;
+        }
+    }
+    async Task<(bool Current,Coord? Coord)> ReadClipboard(int revision)
+    {
+        for(int i=0;i<4;i++)
+        {
+            if(closing||revision!=requestRevision)return(false,null);
+            try{return(true,Clipboard.ContainsText()?Coordinates.Parse(Clipboard.GetText()):null);}
+            catch(COMException){await Task.Delay(40*(i+1));}
+        }
+        Notify("剪贴板正忙 · 本次未读取");return(revision==requestRevision,null);
+    }
+    async void ClipboardChanged()
+    {
+        var seq=GetClipboardSequenceNumber();if(seq==lastSequence)return;lastSequence=seq;
+        if(State.Paused||State.Mode==InputMode.Manual||(State.Mode==InputMode.Smart&&State.Waiting==Awaiting.None))return;
+        int revision=++requestRevision;var read=await ReadClipboard(revision);if(!read.Current)return;
+        if(Dragging){if(read.Coord!=null){Pending=read.Coord;pendingRole=State.Waiting;Notify("地图拖动中收到坐标 · 可选择采用或忽略");}return;}
+        State.OnClipboard(read.Coord);
+    }
+    IntPtr WndProc(IntPtr h,int msg,IntPtr w,IntPtr l,ref bool handled)
+    {
+        if(msg==0x031D&&!Demo)ClipboardChanged();
+        if(msg==0x0312&&hotkeys.TryGetValue(w.ToInt32(),out var action)){if(IsRecordingHotkey)HotkeyRecorded?.Invoke(Pref.Keys.GetValueOrDefault(action,""));else Act(action);handled=true;}
+        return IntPtr.Zero;
+    }
+    public bool Bind(string action,string input,bool feedback=true)
+    {
+        input=input.Trim();uint mod=0,key=0;
+        if(input.Length>0)
+        {
+            try{var gesture=(KeyGesture)new KeyGestureConverter().ConvertFromInvariantString(input)!;
+                mod=(uint)gesture.Modifiers;key=(uint)KeyInterop.VirtualKeyFromKey(gesture.Key);
+                if(key==0||gesture.Key==Key.None)throw new FormatException();
+            }catch{Notify("快捷键格式无效 · 使用 Ctrl+Alt+1 等格式");return false;}
+            // WPF ModifierKeys and Win32 MOD_* use the same bit assignments.
+            if(registered.Any(x=>x.Key!=action&&x.Value==(mod,key))){Notify("快捷键重复 · 原绑定保留");return false;}
+            if(registered.TryGetValue(action,out var existing)&&existing==(mod,key)){if(feedback)Notify("快捷键未改变");return true;}
+            int id=nextId++;
+            if(!RegisterHotKey(handle,id,mod|0x4000,key)){Notify($"{Actions[action]}：快捷键被占用 · 原绑定保留");return false;}
+            foreach(var old in hotkeys.Where(x=>x.Value==action).ToArray()){UnregisterHotKey(handle,old.Key);hotkeys.Remove(old.Key);}
+            hotkeys[id]=action;registered[action]=(mod,key);
+        }
+        else{foreach(var old in hotkeys.Where(x=>x.Value==action).ToArray()){UnregisterHotKey(handle,old.Key);hotkeys.Remove(old.Key);}registered.Remove(action);}
+        Pref.Keys[action]=input;if(feedback){Notify(input.Length==0?"快捷键已清除":$"{Actions[action]}：{input}");Save();}return true;
+    }
+    public void Manual(string text,bool origin)
+    {
+        requestRevision++;var c=Coordinates.Parse(text,true);if(c==null){Notify("未识别到唯一有效坐标 · 支持 x12.11 y11.11");return;}
+        if(origin)State.SetOrigin(c,"手动");else State.SetTarget(c,"手动");
+    }
+    public void MapPoint(Coord c,bool origin)
+    {
+        if(!double.IsFinite(c.X)||!double.IsFinite(c.Y)||c.X<-.03||c.X>163.81||c.Y<-.01||c.Y>163.83)return;
+        if(origin)State.SetOrigin(c,"地图");else State.SetTarget(c,"地图",true);
+    }
+    public void ShowMap(){Main.Show();Main.WindowState=WindowState.Normal;Main.Activate();}
+    public void Quit(){if(closing)return;closing=true;Save();RemoveClipboardFormatListener(handle);foreach(var id in hotkeys.Keys)UnregisterHotKey(handle,id);source?.RemoveHook(WndProc);Application.Current.Shutdown();}
+    [DllImport("user32.dll")]static extern bool AddClipboardFormatListener(IntPtr h);
+    [DllImport("user32.dll")]static extern bool RemoveClipboardFormatListener(IntPtr h);
+    [DllImport("user32.dll")]static extern uint GetClipboardSequenceNumber();
+    [DllImport("user32.dll")]static extern bool RegisterHotKey(IntPtr h,int id,uint mods,uint key);
+    [DllImport("user32.dll")]static extern bool UnregisterHotKey(IntPtr h,int id);
+}

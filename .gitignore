@@ -1,0 +1,38 @@
+# 构建输出
+app/
+artifacts/
+**/bin/
+**/obj/
+
+# 本地工具链（便携 .NET SDK、缓存、上游源码）
+.tools/
+
+# 用户运行时数据（设置、地图缓存）
+**/UserData/
+
+# 由上游数据生成的比对 fixtures
+src/Data/parity-fixtures.json
+
+# Visual Studio / Rider
+.vs/
+.idea/
+*.user
+*.suo
+
+# 测试与日志
+TestResults/
+*.log
+*.binlog
+*.trx
+
+# Node
+node_modules/
+
+# Windows 系统文件
+Thumbs.db
+Desktop.ini
+
+# 敏感信息
+*.pem
+*.key
+.env

@@ -1,0 +1,36 @@
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Media;
+namespace WarDogs;
+public class SettingsPanel:StackPanel
+{
+    public SettingsPanel(Controller c,bool compact=false)
+    {
+        TextBlock Label(string t,double size=12)=>new(){Text=t,FontSize=size,Foreground=(Brush)new BrushConverter().ConvertFromString("#ACB8CA")!,TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,5,0,6)};
+        Children.Add(Label("快捷键",16));Children.Add(Label("直接输入组合键名称，或点“录入”后按键；每项单独保存。",11));
+        foreach(var item in Controller.Actions)
+        {
+            Children.Add(Label(item.Value));var row=new DockPanel{Margin=new Thickness(0,0,0,5)};
+            Button Small(string t)=>new(){Content=t,Padding=new Thickness(7,5,7,5),Margin=new Thickness(4,0,0,0),FontSize=11};
+            var save=Small("保存");DockPanel.SetDock(save,Dock.Right);row.Children.Add(save);
+            var record=Small("录入");DockPanel.SetDock(record,Dock.Right);row.Children.Add(record);
+            var clear=Small("清除");DockPanel.SetDock(clear,Dock.Right);row.Children.Add(clear);
+            var box=new TextBox{Text=c.Pref.Keys.GetValueOrDefault(item.Key,""),FontSize=11,Padding=new Thickness(7,5,7,5),MinWidth=90};row.Children.Add(box);bool recording=false;
+            void RegisteredKey(string gesture){if(recording){box.Text=gesture;recording=false;c.IsRecordingHotkey=false;}}
+            Loaded+=(s,e)=>{box.Text=c.Pref.Keys.GetValueOrDefault(item.Key,"");c.HotkeyRecorded+=RegisteredKey;};Unloaded+=(s,e)=>{c.HotkeyRecorded-=RegisteredKey;recording=false;};
+            record.Click+=(s,e)=>{recording=true;c.IsRecordingHotkey=true;box.Text="请按快捷键…";box.Focus();};
+            box.PreviewKeyDown+=(s,e)=>{if(!recording)return;e.Handled=true;var key=e.Key==Key.System?e.SystemKey:e.Key;if(key is Key.LeftCtrl or Key.RightCtrl or Key.LeftAlt or Key.RightAlt or Key.LeftShift or Key.RightShift or Key.LWin or Key.RWin)return;
+                if(key==Key.Escape)box.Text=c.Pref.Keys.GetValueOrDefault(item.Key,"");else{try{box.Text=new KeyGestureConverter().ConvertToInvariantString(new KeyGesture(key,Keyboard.Modifiers))??"";}catch{box.Text="";c.Notify("请使用修饰键组合，或 F1–F24");}}recording=false;c.IsRecordingHotkey=false;};
+            box.LostKeyboardFocus+=(s,e)=>{if(recording){recording=false;c.IsRecordingHotkey=false;box.Text=c.Pref.Keys.GetValueOrDefault(item.Key,"");}};
+            clear.Click+=(s,e)=>{if(c.Bind(item.Key,""))box.Text="";};save.Click+=(s,e)=>{if(!c.Bind(item.Key,box.Text))box.Text=c.Pref.Keys.GetValueOrDefault(item.Key,"");};Children.Add(row);
+        }
+        Children.Add(new Border{Height=1,Background=(Brush)new BrushConverter().ConvertFromString("#303B4D")!,Margin=new Thickness(0,16,0,12)});
+        Children.Add(Label("悬浮窗外观",16));Children.Add(Label("面板背景浓度（数字保持清晰）",11));
+        var opacity=new Slider{Minimum=.25,Maximum=1,Value=c.Pref.HudOpacity,Margin=new Thickness(0,4,0,12)};opacity.ValueChanged+=(s,e)=>{c.Pref.HudOpacity=e.NewValue;c.Refresh();};Children.Add(opacity);
+        Children.Add(Label("整体大小 75%–150%",11));var scale=new Slider{Minimum=.75,Maximum=1.5,Value=c.Pref.HudScale,TickFrequency=.05,IsSnapToTickEnabled=true,Margin=new Thickness(0,4,0,12)};scale.ValueChanged+=(s,e)=>{c.Pref.HudScale=e.NewValue;c.Refresh();};Children.Add(scale);
+        var forms=new WrapPanel();foreach(var (name,form) in new[]{("控制面板","panel"),("透明数字","compact"),("小圆球","bubble")}){var b=new Button{Content=name,Padding=new Thickness(8,6,8,6),FontSize=11};b.Click+=(s,e)=>c.Hud.SetForm(form);forms.Children.Add(b);}Children.Add(forms);
+        if(!compact)Children.Add(Label("设置与 HUD 同步保存。关闭大型地图只隐藏工作台，不影响 HUD 或坐标接收。",12));
+        Unloaded+=(s,e)=>c.IsRecordingHotkey=false;
+    }
+}

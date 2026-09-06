@@ -1,0 +1,23 @@
+{
+  "files": [
+    {
+      "sha256": "609B903186B0D2A2964CC12CED6B897F248DD9A0F1226052F0441F5CFEAA8DAD",
+      "file": "weapons.json"
+    },
+    {
+      "sha256": "7DC52433E0D5ABC8DFA3CE5F7319601AA0DDF3F7DB0FA6DE21D64A952AC4F4D6",
+      "file": "bakurani.json"
+    },
+    {
+      "sha256": "F8120165BFAEFEA33CCEEEB6A469BFD5E72EAAC0024CEF223EEDC21F10EBF6BD",
+      "file": "ozeti.json"
+    },
+    {
+      "sha256": "4A609DE0A094EE26BE58DA6B3EC2BD41AFB6DF5B105A27462A1999B27B5F8275",
+      "file": "LICENSE"
+    }
+  ],
+  "acquired": "2026-09-07",
+  "repository": "https://github.com/apollyon-sys/wardogs-calculator",
+  "commit": "c3252c9d24a22d1aad5d3fa4408807aef591bb56"
+}
