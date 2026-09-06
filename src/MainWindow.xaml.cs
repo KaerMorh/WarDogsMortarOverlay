@@ -21,6 +21,7 @@ public partial class MainWindow:Window
         if(initializing)return;initializing=true;
         try
         {
+
             var env=await CoreWebView2Environment.CreateAsync(null,Path.Combine(Controller.UserDir,c.Demo?"WebViewDemo":"WebView"));
             await MapView.EnsureCoreWebView2Async(env);
             MapView.CoreWebView2.SetVirtualHostNameToFolderMapping("wardogs.local",Path.Combine(Controller.Root,"Web"),CoreWebView2HostResourceAccessKind.DenyCors);
@@ -62,7 +63,7 @@ public partial class MainWindow:Window
     void ActionClick(object sender,RoutedEventArgs e)=>c.Act((string)((Button)sender).Tag);
     void QuitClick(object s,RoutedEventArgs e)=>c.Quit();
     void BackToHud(object s,RoutedEventArgs e){if(!c.Hud.IsVisible)c.Hud.Show();c.Hud.Activate();Hide();}
-    void ShowMapPage(object s,RoutedEventArgs e){MapPage.Visibility=Visibility.Visible;SettingsPage.Visibility=Visibility.Collapsed;MapNav.Background=(Brush)new BrushConverter().ConvertFromString("#2D507C")!;SettingsNav.Background=(Brush)new BrushConverter().ConvertFromString("#252D3B")!;}
+    public void ShowMapPage(object s,RoutedEventArgs e){MapPage.Visibility=Visibility.Visible;SettingsPage.Visibility=Visibility.Collapsed;MapNav.Background=(Brush)new BrushConverter().ConvertFromString("#2D507C")!;SettingsNav.Background=(Brush)new BrushConverter().ConvertFromString("#252D3B")!;}
     void ShowSettingsPage(object s,RoutedEventArgs e){MapPage.Visibility=Visibility.Collapsed;SettingsPage.Visibility=Visibility.Visible;MapNav.Background=(Brush)new BrushConverter().ConvertFromString("#252D3B")!;SettingsNav.Background=(Brush)new BrushConverter().ConvertFromString("#2D507C")!;}
     object[] TowerMarkers()
     {
@@ -81,11 +82,12 @@ public partial class MainWindow:Window
         void Check(bool ok,string text){if(!ok)throw new Exception(text);log.Add("PASS "+text);}
         try
         {
+            var defaults=new Preferences();Check(defaults.BubbleReadout&&defaults.HudOpacity==0.5683815809559255&&defaults.HudButtonOpacity==.75&&defaults.HudTileOpacity==.75,"recorded opacity defaults and enabled bubble readout");
             for(int n=0;n<100&&!ready;n++)await Task.Delay(100);
             Check(ready,"WebView2 local map ready");
             Check(c.Result?.Single?.ToString()=="690","HUD initial demo 300m -> 690 MIL");
-            await Task.Delay(900);
-            var loaded=await MapView.CoreWebView2.ExecuteScriptAsync("[...cache.values()].filter(i=>i.complete&&i.naturalWidth>0).length");
+            await MapView.CoreWebView2.ExecuteScriptAsync("paint()");
+            var loaded="0";for(int n=0;n<100&&loaded=="0";n++){await Task.Delay(100);loaded=await MapView.CoreWebView2.ExecuteScriptAsync("[...cache.values()].filter(i=>i.complete&&i.naturalWidth>0).length");}
             Check(int.Parse(loaded)>0,"Bakurani offline tiles loaded");
             Check(await MapView.CoreWebView2.ExecuteScriptAsync("state.towers.length===5 && state.towers.some(t=>t.label==='Tower 1'&&t.x===80.52)")=="true","Bakurani tower markers and coordinate conversion");
             await MapView.CoreWebView2.ExecuteScriptAsync("(()=>{const p=screen({x:83.57,y:69.85});setPoint('target',p.x,p.y);return true})()");
@@ -104,9 +106,42 @@ public partial class MainWindow:Window
             c.State.SetOrigin(new(80.52,69.85),"演示");c.State.SetTarget(new(82.92,71.65),"演示");
             FitClick(this,new RoutedEventArgs());await Task.Delay(900);
             c.Hud.Left=SystemParameters.WorkArea.Right-c.Hud.ActualWidth-35;c.Hud.Top=100;
-            c.Hud.SetForm("compact");await Task.Delay(100);Check(c.Hud.ActualWidth<=320&&c.Hud.ActualHeight<85,"transparent HUD dimensions");
-            c.Hud.SetForm("bubble");await Task.Delay(100);Check(c.Hud.ActualWidth==40&&c.Hud.ActualHeight==40,"40px collapsed bubble");
-            c.Hud.SetForm("panel");await Task.Delay(100);Check(c.Hud.ActualWidth<=360&&c.Hud.ActualHeight<270,"compact panel dimensions");
+            c.Hud.SetForm("compact");await Task.Delay(100);Check(c.Hud.ActualWidth<=350&&c.Hud.ActualHeight<240,"simplified HUD dimensions");
+            c.Pref.BubbleReadout=false;c.Hud.SetForm("bubble");await Task.Delay(100);Check(c.Hud.ActualWidth==40&&c.Hud.ActualHeight==40,"40px collapsed bubble");
+            c.Hud.SetForm("panel");await Task.Delay(100);Check(c.Hud.ActualWidth<=360&&c.Hud.ActualHeight<360,"compact panel dimensions");
+            var before=c.History.Count;c.Dragging=true;c.MapPoint(new(81.1,70.1),false);c.MapPoint(new(81.2,70.2),false);Check(c.History.Count==before,"map drag does not flood history");c.Dragging=false;
+            Check(c.History.Count==before+1&&c.History[0].Position?.Coordinate==new Coord(81.2,70.2),"map drag records final point");
+            var saved=c.History[0];Check(saved.Proximity.Contains("T1"),"coordinate record includes nearby Tower");
+            c.State.ChangeMap();c.RestoreHistory(saved);Check(c.State.Map=="bakurani"&&c.State.Current.Target==saved.Position!.Coordinate,"history restores target and its map");
+            var oldOrigin=c.History.First(h=>h.Position?.Role==Awaiting.Origin);c.State.SetOrigin(new(78,78));c.RestoreHistory(oldOrigin);Check(c.State.Current.Origin==oldOrigin.Position!.Coordinate&&c.State.Current.Target==null,"history restores origin and clears stale target");
+            c.State.SetTarget(new(81.52,70.85),"演示");
+            IEnumerable<Button> Buttons(DependencyObject root)
+            {
+                for(int i=0;i<VisualTreeHelper.GetChildrenCount(root);i++){var child=VisualTreeHelper.GetChild(root,i);if(child is Button button)yield return button;foreach(var nested in Buttons(child))yield return nested;}
+            }
+            c.Hud.ExpandHistory();await Task.Delay(100);
+            var historyButton=Buttons(c.Hud).First(b=>b.DataContext is HistoryEntry {Position.Role:Awaiting.Target});var chosen=(HistoryEntry)historyButton.DataContext;
+            historyButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));Check(c.State.Current.Target==chosen.Position!.Coordinate&&c.State.Current.Source=="历史恢复","actual history button restores coordinate");
+            c.Hud.SetForm("compact");Buttons(c.Hud).First(b=>b.Content as string=="还原界面").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));Check(c.Hud.Form=="panel","dedicated restore button works");
+            Buttons(c.Hud).First(b=>b.Content as string=="设置").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Buttons(c.Hud).First(b=>b.Content as string=="本次记录").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            c.Hud.UpdateLayout();Check(Buttons(c.Hud).Any(b=>b.DataContext is HistoryEntry),"settings history uses the same clickable records");
+            Buttons(c.Hud).First(b=>b.Content as string=="快捷键 / 外观").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            IEnumerable<TextBlock> Texts(DependencyObject root){for(int i=0;i<VisualTreeHelper.GetChildrenCount(root);i++){var child=VisualTreeHelper.GetChild(root,i);if(child is TextBlock text)yield return text;foreach(var nested in Texts(child))yield return nested;}}
+            c.Hud.SetForm("compact");c.Hud.UpdateLayout();Check(!Texts(c.Hud).Any(t=>t.Text.Contains("Ctrl+Alt")),"simplified buttons hide shortcut labels");
+            var actionButtons=Buttons(c.Hud).Where(b=>b.Tag is string).ToArray();Check(actionButtons.Length==5&&actionButtons.Select(b=>Math.Round(b.TranslatePoint(new Point(),c.Hud).Y)).Distinct().Count()==1,"simplified actions share one row");
+            c.State.SetTarget(new(90,90));foreach(var form in new[]{"panel","compact"}){c.Hud.SetForm(form);Check(Texts(c.Hud).Any(t=>t.Text.StartsWith("目标  x90.00")),"target remains visible out of range in "+form);}
+            c.Pref.HudButtonOpacity=0;c.Pref.HudTileOpacity=0;c.Refresh();Check(Buttons(c.Hud).All(b=>b.Background is SolidColorBrush {Color.A:0}),"button backgrounds independently reach zero opacity");
+            var metricLabel=Texts(c.Hud).First(t=>t.Text=="距离 m");var tile=(Border)VisualTreeHelper.GetParent(VisualTreeHelper.GetParent(metricLabel));Check(tile.Background is SolidColorBrush {Color.A:0}&&metricLabel.Opacity==1,"tile background opacity does not fade text");
+            c.Pref.HudButtonOpacity=1;c.Pref.HudTileOpacity=.94;c.State.SetTarget(new(81.52,70.85),"演示");
+            c.Hud.SetForm("bubble");var menu=c.Hud.BubbleMenu();menu.Items.OfType<MenuItem>().First(m=>m.Header.ToString()!.StartsWith("小球极简化")).RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            Check(c.Pref.BubbleReadout&&Texts(c.Hud).Any(t=>t.Text=="141(m)  839 MIL  45.0 度"),"bubble menu enables units-only readout");
+            var inputMenu=c.Hud.BubbleMenu().Items.OfType<MenuItem>().First(m=>m.Header.ToString()=="输入模式");inputMenu.Items.OfType<MenuItem>().First(m=>m.Header.ToString()=="精确手动").RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));Check(c.State.Mode==InputMode.Manual,"bubble menu selects explicit input mode");
+            c.Hud.BubbleMenu().Items.OfType<MenuItem>().First(m=>m.Header.ToString()=="设置").RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));Check(c.Hud.Form=="settings","bubble menu opens settings");
+            Buttons(c.Hud).First(b=>b.Content as string=="返回界面").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));Check(c.Hud.Form=="bubble","settings returns to bubble");c.Pref.BubbleReadout=false;c.State.Mode=InputMode.Smart;
+            c.Pref.BubbleReadout=true;c.Hud.OpenSettings();Buttons(c.Hud).First(b=>b.Content as string=="橙色").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));c.Hud.SetForm("bubble");
+            Check(Texts(c.Hud).Any(t=>t.Text.Contains(" MIL ")&&t.Foreground is SolidColorBrush {Color.R:255,Color.G:189,Color.B:135}),"bubble text color updates from settings");c.Pref.BubbleTextColor="#91C5FF";c.Pref.BubbleReadout=false;
+            c.Hud.SetForm("panel");await Task.Delay(100);
             await ExportVisuals(dir);log.Add("PASS native WPF and WebView captures exported");
             File.WriteAllLines(Path.Combine(dir,"integration.txt"),log);
             c.Notify("集成验证完成 · 演示数据，可直接拖动地图标记");
@@ -123,6 +158,16 @@ public partial class MainWindow:Window
         var dv=new DrawingVisual();using(var dc=dv.RenderOpen()){dc.DrawImage(wpf,new Rect(0,0,root.ActualWidth,root.ActualHeight));var pt=MapView.TranslatePoint(new Point(0,0),root);dc.DrawImage(map,new Rect(pt.X,pt.Y,MapView.ActualWidth,MapView.ActualHeight));}
         var composite=new RenderTargetBitmap((int)Math.Ceiling(root.ActualWidth),(int)Math.Ceiling(root.ActualHeight),96,96,PixelFormats.Pbgra32);composite.Render(dv);Save(composite,Path.Combine(dir,"workbench.png"));Save(Render((FrameworkElement)c.Hud.Content),Path.Combine(dir,"hud.png"));
         foreach(var form in new[]{"compact","bubble","settings"}){c.Hud.SetForm(form);await Task.Delay(100);Save(Render((FrameworkElement)c.Hud.Content),Path.Combine(dir,"hud-"+form+".png"));}
+        c.Pref.BubbleReadout=true;c.Hud.SetForm("bubble");await Task.Delay(100);Save(Render((FrameworkElement)c.Hud.Content),Path.Combine(dir,"hud-bubble-readout.png"));
+        var bubbleMenu=c.Hud.BubbleMenu();bubbleMenu.PlacementTarget=c.Hud;bubbleMenu.IsOpen=true;await Task.Delay(100);Save(Render(bubbleMenu),Path.Combine(dir,"bubble-menu.png"));bubbleMenu.IsOpen=false;c.Pref.BubbleReadout=false;
+        c.Hud.SetForm("panel");c.Hud.ExpandHistory();await Task.Delay(100);Save(Render((FrameworkElement)c.Hud.Content),Path.Combine(dir,"hud-history.png"));
+        foreach(var form in new[]{"panel","compact"})
+        {
+            c.Pref.HudOpacity=.25;c.Hud.SetForm(form);await Task.Delay(100);var hud=(FrameworkElement)c.Hud.Content;
+            var white=new DrawingVisual();using(var dc=white.RenderOpen()){dc.DrawRectangle(Brushes.White,null,new Rect(0,0,hud.ActualWidth,hud.ActualHeight));dc.DrawImage(Render(hud),new Rect(0,0,hud.ActualWidth,hud.ActualHeight));}
+            var onWhite=new RenderTargetBitmap((int)Math.Ceiling(hud.ActualWidth),(int)Math.Ceiling(hud.ActualHeight),96,96,PixelFormats.Pbgra32);onWhite.Render(white);Save(onWhite,Path.Combine(dir,"hud-"+form+"-white.png"));
+        }
+        var tip=new ToolTip{Content="设置炮位 / 等待新坐标\n快捷键：Ctrl+Alt+1",PlacementTarget=c.Hud,IsOpen=true};await Task.Delay(200);tip.UpdateLayout();Save(Render(tip),Path.Combine(dir,"tooltip.png"));tip.IsOpen=false;c.Pref.HudOpacity=1;
         ShowSettingsPage(this,new RoutedEventArgs());UpdateLayout();await Task.Delay(100);Save(Render(root),Path.Combine(dir,"settings.png"));ShowMapPage(this,new RoutedEventArgs());c.Hud.SetForm("panel");
     }
 }

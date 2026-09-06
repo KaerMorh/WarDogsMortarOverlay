@@ -83,6 +83,24 @@ public class Ballistics
 }
 public enum InputMode { Continuous, Manual, Smart }
 public enum Awaiting { None, Origin, Target }
+public record PositionUpdate(string Map,string Weapon,Awaiting Role,Coord Coordinate,string Source);
+public record TowerInfo(string Label,Coord Center);
+public static class TowerProximity
+{
+    public static string Describe(Coord point,IEnumerable<TowerInfo> towers)
+    {
+        var nearby=towers.Select(t=>new{Tower=t,D=Math.Sqrt(Math.Pow(point.X-t.Center.X,2)+Math.Pow(point.Y-t.Center.Y,2))*100})
+            .Where(t=>t.D<=200+1e-7).OrderBy(t=>t.D).Select(t=>
+            {
+                var name=t.Tower.Label.Replace("Tower ","T");
+                if(t.D<.01)return $"{name} 中心 · 0 m";
+                var angle=(Math.Atan2(point.X-t.Tower.Center.X,point.Y-t.Tower.Center.Y)*180/Math.PI+360)%360;
+                var direction=new[]{"北","东北","东","东南","南","西南","西","西北"}[(int)Math.Floor((angle+22.5)/45)%8];
+                return $"{name} {direction} · 距中心 {t.D:0} m";
+            }).ToArray();
+        return nearby.Length>0?string.Join("；",nearby):"200 m 内无 Tower";
+    }
+}
 public class MapSession
 {
     public Coord? Origin{get;set;} public Coord? Target{get;set;} public Coord? LastTarget{get;set;}
@@ -100,6 +118,7 @@ public class Session
     public MapSession Current=>Maps[Map];
     public event Action? Changed;
     public event Action<string>? Notice;
+    public event Action<PositionUpdate>? PositionUpdated;
     public string ModeText=>Mode switch{InputMode.Continuous=>"连续目标",InputMode.Manual=>"精确手动",_=>"智能模式"};
     public string Status=>Paused?"已暂停":Waiting==Awaiting.Origin?"等待复制炮位":Waiting==Awaiting.Target?"等待复制目标":Mode==InputMode.Continuous?"连续接收目标":Mode==InputMode.Manual?"手动读取":"就绪";
     public void Tell(string text){Notice?.Invoke(text);Changed?.Invoke();}
@@ -107,13 +126,13 @@ public class Session
     {
         var s=Current;if(s.Origin!=c)s.Target=null;
         s.Origin=c;s.Source=source;s.Updated=DateTime.Now;Waiting=Awaiting.None;
-        Tell("炮位已锁定 · 请选定目标");
+        PositionUpdated?.Invoke(new(Map,Weapon,Awaiting.Origin,c,source));Changed?.Invoke();
     }
     public void SetTarget(Coord c,string source="剪贴板",bool quiet=false)
     {
         var s=Current;
         s.Target=c;s.LastTarget=c;s.Source=source;s.Updated=DateTime.Now;Waiting=Awaiting.None;
-        if(!quiet)Tell(s.Origin==null?"目标已保存 · 请设置炮位":"目标已更新");else Changed?.Invoke();
+        PositionUpdated?.Invoke(new(Map,Weapon,Awaiting.Target,c,source));Changed?.Invoke();
     }
     public void OriginAction(Coord? c)
     {

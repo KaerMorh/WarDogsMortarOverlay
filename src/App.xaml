@@ -3,6 +3,16 @@
   <SolidColorBrush x:Key="Bg" Color="#10141C"/><SolidColorBrush x:Key="Panel" Color="#191F2B"/>
   <SolidColorBrush x:Key="Ink" Color="#EEF3FC"/><SolidColorBrush x:Key="Muted" Color="#98A6BB"/>
   <SolidColorBrush x:Key="Accent" Color="#91BFFD"/>
+  <Style TargetType="ToolTip">
+   <Setter Property="Background" Value="#151D2A"/><Setter Property="Foreground" Value="#F3F6FB"/>
+   <Setter Property="BorderBrush" Value="#8197B6"/><Setter Property="BorderThickness" Value="1"/><Setter Property="Padding" Value="10,7"/>
+   <Setter Property="MaxWidth" Value="390"/>
+   <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ToolTip">
+    <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" Padding="{TemplateBinding Padding}" CornerRadius="5">
+     <ContentPresenter Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}" TextElement.Foreground="#F3F6FB"/>
+    </Border>
+   </ControlTemplate></Setter.Value></Setter>
+  </Style>
   <Style TargetType="TextBlock"><Setter Property="Foreground" Value="{StaticResource Ink}"/><Setter Property="FontFamily" Value="Segoe UI, Microsoft YaHei UI"/></Style>
   <Style TargetType="Button"><Setter Property="Foreground" Value="{StaticResource Ink}"/><Setter Property="Background" Value="#252D3B"/><Setter Property="Padding" Value="12,8"/><Setter Property="Margin" Value="0,0,6,6"/><Setter Property="Cursor" Value="Hand"/><Setter Property="BorderThickness" Value="0"/><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button"><Border x:Name="B" Background="{TemplateBinding Background}" CornerRadius="5" Padding="{TemplateBinding Padding}"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="B" Property="Background" Value="#39465A"/></Trigger><Trigger Property="IsEnabled" Value="False"><Setter TargetName="B" Property="Opacity" Value="0.4"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>
   <Style x:Key="Primary" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}"><Setter Property="Background" Value="#2D507C"/><Setter Property="FontWeight" Value="SemiBold"/></Style>

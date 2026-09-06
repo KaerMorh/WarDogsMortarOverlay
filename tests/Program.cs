@@ -23,6 +23,15 @@ s.TargetAction(t);Check(s.Waiting==Awaiting.Target,"same target waits");s.Toggle
 s.OriginAction(new(80,71));Check(s.Current.Target==null,"origin clears active target");
 s.ChangeMap();Check(s.Current.Origin==null,"map isolation");s.ChangeMap();Check(s.Current.Origin==new Coord(80,71),"restore map without confirmation");
 s.Mode=InputMode.Continuous;s.OnClipboard(t);Check(s.Current.Target==t,"continuous target");s.Mode=InputMode.Manual;s.OnClipboard(new(83,70));Check(s.Current.Target==t,"manual ignores events");
+var tower=new[]{new TowerInfo("Tower 1",new(10,10))};
+Check(TowerProximity.Describe(new(11,11),tower).Contains("T1 东北 · 距中心 141 m"),"tower northeast meters");
+Check(TowerProximity.Describe(new(10,12),tower).Contains("北 · 距中心 200 m"),"tower inclusive 200m");
+Check(TowerProximity.Describe(new(10,12.00001),tower)=="200 m 内无 Tower","tower outside boundary");
+Check(TowerProximity.Describe(new(10,10),tower)=="T1 中心 · 0 m","tower center");
+foreach(var (point,direction) in new[]{(new Coord(11,10),"东"),(new Coord(9,10),"西"),(new Coord(10,9),"南"),(new Coord(9,11),"西北"),(new Coord(11,9),"东南"),(new Coord(9,9),"西南")})Check(TowerProximity.Describe(point,tower).Contains("T1 "+direction+" ·"),"tower compass "+direction);
+Check(TowerProximity.Describe(new(10,10),new[]{tower[0],new TowerInfo("Tower 2",new(11,10))}).Contains("T2 西 · 距中心 100 m"),"multiple nearby towers");
+var recorded=new List<PositionUpdate>();s.PositionUpdated+=recorded.Add;s.SetOrigin(o,"测试");s.SetTarget(t,"地图",true);
+Check(recorded.Count==2&&recorded[0].Role==Awaiting.Origin&&recorded[1].Coordinate==t&&recorded[1].Map==s.Map,"typed position events including quiet map updates");
 Console.WriteLine($"PASS: {count} assertions");
 var fixtures=new List<object>();
 foreach(var w in b.Weapons.Values)

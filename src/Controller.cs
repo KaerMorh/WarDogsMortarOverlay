@@ -1,4 +1,5 @@
 using System.IO;
+using System.Collections.ObjectModel;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Windows;
@@ -8,12 +9,24 @@ using System.Windows.Threading;
 
 namespace WarDogs;
 public record BindingSetting(string Action,string Keys);
+public record HistoryEntry(DateTime Time,string Message,PositionUpdate? Position=null,string Proximity="")
+{
+    public string Color=>Position==null?"#CAD3DF":Position.Role==Awaiting.Origin?"#91C5FF":"#FFBD87";
+    public string Title=>Position==null?$"{Time:HH:mm:ss}  {Message}":$"{Time:HH:mm:ss}  {(Position.Role==Awaiting.Origin?"炮位":"目标")} · {Position.Coordinate}";
+    public string Detail=>Position==null?"":$"{(Position.Map=="bakurani"?"Bakurani":"Ozeti")} · {(Position.Weapon=="mortar"?"迫击炮":"SPH-2")} · {Position.Source}\n{Proximity}";
+    public string FullText=>Title+(Detail.Length>0?"\n"+Detail:"");
+    public string Hint=>Position==null?Message:$"点击恢复{(Position.Role==Awaiting.Origin?"炮位（位置改变会清除当前目标）":"目标")}；不同地图将自动切换。\n{FullText}";
+}
 public class Preferences
 {
     public Session Session{get;set;}=new();
     public Dictionary<string,string> Keys{get;set;}=new(){{"origin","Ctrl+Alt+1"},{"target","Ctrl+Alt+2"},{"pause","Ctrl+Alt+P"},{"hud","Ctrl+Alt+H"},{"mode","Ctrl+Alt+M"},{"map","Ctrl+Alt+G"}};
     public double HudLeft{get;set;}=double.NaN;public double HudTop{get;set;}=80;
-    public double HudOpacity{get;set;}=1;
+    public double HudOpacity{get;set;}=0.5683815809559255;
+    public double HudButtonOpacity{get;set;}=.75;
+    public double HudTileOpacity{get;set;}=.75;
+    public bool BubbleReadout{get;set;}=true;
+    public string BubbleTextColor{get;set;}="#91C5FF";
     public string HudForm{get;set;}="panel";
     public double HudScale{get;set;}=1;
 }
@@ -28,10 +41,13 @@ public class Controller
     public MainWindow Main=null!;public HudWindow Hud=null!;
     public Preferences Pref{get;}
     public bool Demo{get;}
-    public bool Dragging{get;set;}
+    bool dragging;PositionUpdate? dragUpdate;
+    public bool Dragging{get=>dragging;set{dragging=value;if(!value&&dragUpdate is {} p){dragUpdate=null;RecordPosition(p);}}}
     public Coord? Pending{get;private set;}
     Awaiting pendingRole;
     public List<string> Notices{get;}=new();
+    public ObservableCollection<HistoryEntry> History{get;}=new();
+    public Dictionary<string,TowerInfo[]> Towers{get;}=new();
     public event Action? Updated;
     IntPtr handle;HwndSource? source;Dictionary<int,string> hotkeys=new();int nextId=100;
     readonly Dictionary<string,(uint Mod,uint Key)> registered=new();
@@ -50,7 +66,13 @@ public class Controller
         if(State.Weapon!="mortar"&&State.Weapon!="spg")State.Weapon="mortar";
         foreach(var id in new[]{"bakurani","ozeti"})if(!State.Maps.ContainsKey(id))State.Maps[id]=new();
         Calculator=new(Path.Combine(Root,"Data","weapons.json"));
-        State.Notice+=Notify;State.Changed+=Refresh;
+        foreach(var id in new[]{"bakurani","ozeti"})
+        {
+            using var doc=JsonDocument.Parse(File.ReadAllText(Path.Combine(Root,"Data",id+".json")));
+            Towers[id]=doc.RootElement.GetProperty("markers").EnumerateArray().Where(x=>x.GetProperty("icon").GetString()=="tower")
+                .Select(x=>new TowerInfo(x.GetProperty("label").GetString()!,new(x.GetProperty("x").GetDouble()/100,x.GetProperty("y").GetDouble()/100))).ToArray();
+        }
+        State.Notice+=Notify;State.Changed+=Refresh;State.PositionUpdated+=p=>{if(Dragging&&p.Source=="地图")dragUpdate=p;else RecordPosition(p);};
         saveTimer.Tick+=(s,e)=>{saveTimer.Stop();Save();};
         if(demo){State.SetOrigin(new(80.52,69.85),"演示");State.SetTarget(new(82.92,71.65),"演示");}
         Notify(demo?"演示数据 · 未监听剪贴板，正式启动即可使用":"已就绪 · 设置炮位开始使用");
@@ -58,9 +80,17 @@ public class Controller
     public Solution? Result=>State.Current.Origin is {} o&&State.Current.Target is {} t?Calculator.Solve(o,t,State.Weapon):null;
     public void Notify(string message)
     {
-        if(Notices.Count==0||!Notices[0].EndsWith(message))Notices.Insert(0,$"{DateTime.Now:HH:mm:ss}  {message}");
-        if(Notices.Count>20)Notices.RemoveRange(20,Notices.Count-20);
+        if(History.Count==0||History[0].Position!=null||History[0].Message!=message)AddHistory(new(DateTime.Now,message));
         Updated?.Invoke();
+    }
+    void AddHistory(HistoryEntry entry){History.Insert(0,entry);Notices.Insert(0,entry.FullText.Replace('\n',' '));if(Notices.Count>20)Notices.RemoveAt(20);}
+    void RecordPosition(PositionUpdate p){AddHistory(new(DateTime.Now,"",p,TowerProximity.Describe(p.Coordinate,Towers[p.Map])));Updated?.Invoke();}
+    public void RestoreHistory(HistoryEntry entry)
+    {
+        if(entry.Position is not {} p)return;
+        requestRevision++;Pending=null;dragUpdate=null;
+        if(State.Map!=p.Map)State.ChangeMap();
+        if(p.Role==Awaiting.Origin)State.SetOrigin(p.Coordinate,"历史恢复");else State.SetTarget(p.Coordinate,"历史恢复");
     }
     public void Refresh(){Updated?.Invoke();saveTimer.Stop();saveTimer.Start();}
     public void Save()
@@ -152,7 +182,7 @@ public class Controller
         if(!double.IsFinite(c.X)||!double.IsFinite(c.Y)||c.X<-.03||c.X>163.81||c.Y<-.01||c.Y>163.83)return;
         if(origin)State.SetOrigin(c,"地图");else State.SetTarget(c,"地图",true);
     }
-    public void ShowMap(){Main.Show();Main.WindowState=WindowState.Normal;Main.Activate();}
+    public void ShowMap(){Main.ShowMapPage(this,new RoutedEventArgs());Main.Show();Main.WindowState=WindowState.Normal;Main.Activate();}
     public void Quit(){if(closing)return;closing=true;Save();RemoveClipboardFormatListener(handle);foreach(var id in hotkeys.Keys)UnregisterHotKey(handle,id);source?.RemoveHook(WndProc);Application.Current.Shutdown();}
     [DllImport("user32.dll")]static extern bool AddClipboardFormatListener(IntPtr h);
     [DllImport("user32.dll")]static extern bool RemoveClipboardFormatListener(IntPtr h);
