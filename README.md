@@ -41,4 +41,4 @@ Windows 桌面火力计算器：C# / WPF HUD + WebView2 离线交互地图。
 
 ## 许可与来源
 
-上游项目 https://github.com/apollyon-sys/wardogs-calculator 使用 MIT，许可证保存在 `src/Data/LICENSE`，插值算法移植保留其署名。游戏地图资产属于相应权利人，不能将上游 MIT 解释为地图资产的授权。本项目当前为本地开发版本。
+上游项目 https://github.com/apollyon-sys/wardogs-calculator 使用 MIT，许可证保存在 `src/Data/LICENSE`，插值算法移植保留其署名。
