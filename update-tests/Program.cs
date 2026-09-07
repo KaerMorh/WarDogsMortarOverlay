@@ -86,12 +86,20 @@ var pending = service.DownloadAsync(); await Task.Delay(20); service.Cancel(); a
 Check(!service.Busy && !service.Ready && service.Status.Contains("取消"), "cancel download returns to retryable state");
 handler.Delay = false; SetFeed(manifest); await service.DownloadAsync();
 Check(service.Ready, "retry after cancellation succeeds");
-if (args.Length == 2 && args[0] == "--release")
+if ((args.Length == 2 && args[0] == "--release") || (args.Length == 3 && args[0] == "--available"))
 {
     var live = new UpdateService(new Controller(), new HttpClient { Timeout = Timeout.InfiniteTimeSpan }, File.ReadAllText(args[1]), Path.Combine(Controller.Root, "Live"));
     await live.CheckAsync();
-    Check(!live.HasUpdate && live.Status == "当前已是最新版本", "public signed release feed: " + live.Status);
-    Console.WriteLine("PASS: public release feed and signature verified, current version is latest");
+    if (args[0] == "--available")
+    {
+        Check(live.HasUpdate && live.Available?.Version == args[2], "public signed upgrade offer: " + live.Status);
+        Console.WriteLine($"PASS: {UpdateService.CurrentVersion} detects signed public update {live.Available!.Version}");
+    }
+    else
+    {
+        Check(!live.HasUpdate && live.Status == "当前已是最新版本", "public signed release feed: " + live.Status);
+        Console.WriteLine("PASS: public release feed and signature verified, current version is latest");
+    }
 }
 Console.WriteLine($"PASS: {assertions} update assertions (signature, versions, downloads, retry, cancellation)");
 }
