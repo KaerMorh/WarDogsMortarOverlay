@@ -1,5 +1,7 @@
 # WarDogs Overlay 0.6.3
 
+联机开发分支使用 **Go WebSocket 服务端 + C# 客户端**，新增模块在独立可拖动窗口中。继续开发请先阅读 [联机开发方案](docs/联机开发方案.md)、[消息协议](docs/联机协议.md) 和 [开发进度](docs/联机开发进度.md)。使用 `build-multiplayer.ps1` 构建到 `artifacts/multiplayer/`，不覆盖下方稳定版 `app/`。
+
 Windows 桌面火力计算器：C# / WPF HUD + WebView2 离线交互地图。
 
 ## 启动

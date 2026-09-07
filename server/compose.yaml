@@ -1,0 +1,22 @@
+services:
+  server:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8080"
+    mem_limit: 256m
+    cpus: 1.0
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    environment:
+      WARDOGS_ADDR: 0.0.0.0:8080
+      WARDOGS_MAX_ROOMS: 64
+      WARDOGS_MAX_MEMBERS: 32
+      WARDOGS_MAX_CONNECTIONS: 512
+      GOMEMLIMIT: 192MiB
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"

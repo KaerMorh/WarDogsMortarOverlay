@@ -130,6 +130,7 @@ public partial class HudWindow:Window
         var mapMenu=new MenuItem{Header="地图",HeaderTemplate=headerTemplate};foreach(var (id,label) in new[]{("bakurani","Bakurani"),("ozeti","Ozeti")}){var item=Item(label,()=>{if(c.State.Map!=id)c.Act("map");});item.IsCheckable=true;item.IsChecked=c.State.Map==id;mapMenu.Items.Add(item);}menu.Items.Add(mapMenu);
         var weaponMenu=new MenuItem{Header="炮种",HeaderTemplate=headerTemplate};foreach(var (id,label) in new[]{("mortar","迫击炮"),("spg","SPH-2")}){var item=Item(label,()=>{if(c.State.Weapon!=id)c.Act("weapon");});item.IsCheckable=true;item.IsChecked=c.State.Weapon==id;weaponMenu.Items.Add(item);}menu.Items.Add(weaponMenu);
         menu.Items.Add(new Separator());Add("手动输入坐标",()=>OpenSettings("tools"));Add("本次记录 / 恢复坐标",()=>OpenSettings("history"));
+        Add("联机房间 / 成员列表",()=>OpenSettings("room"));Add("发布任务 / 取消等待",()=>c.Act("publishTask"),c.Pref.Keys.GetValueOrDefault("publishTask"));Add("选择房间任务",()=>c.Act("roomTasks"),c.Pref.Keys.GetValueOrDefault("roomTasks"));
         if(c.Pending!=null){Add("采用暂存坐标",()=>c.Act("pending"));Add("忽略暂存坐标",()=>c.Act("discard"));}
         Add("退出应用",()=>c.Quit());return menu;
     }
@@ -145,8 +146,8 @@ public partial class HudWindow:Window
         var buttons=new StackPanel{Orientation=Orientation.Horizontal};buttons.Children.Add(Btn("设为炮位",()=>c.Manual(input.Text,true)));buttons.Children.Add(Btn("设为目标",()=>c.Manual(input.Text,false),primary:true));manual.Children.Add(buttons);
         var exit=Btn("退出应用",()=>c.Quit());exit.Margin=new Thickness(0,12,0,0);manual.Children.Add(exit);
         void Tab(UIElement child){c.IsRecordingHotkey=false;body.Children.Clear();body.Children.Add(child);}
-        tabs.Children.Add(Btn("快捷键 / 外观",()=>Tab(configScroll)));tabs.Children.Add(Btn("坐标 / 工具",()=>Tab(manual)));tabs.Children.Add(Btn("本次记录",()=>Tab(new HistoryPanel(c){Height=420})));p.Children.Add(tabs);
-        Tab(settingsTab=="history"?new HistoryPanel(c){Height=420}:settingsTab=="tools"?manual:configScroll);settingsTab="config";p.Children.Add(body);
+        tabs.Children.Add(Btn("快捷键 / 外观",()=>Tab(configScroll)));tabs.Children.Add(Btn("坐标 / 工具",()=>Tab(manual)));tabs.Children.Add(Btn("本次记录",()=>Tab(new HistoryPanel(c){Height=420})));tabs.Children.Add(Btn("联机",()=>Tab(new ScrollViewer{Content=new WarDogs.Multiplayer.RoomSettingsPanel(c),MaxHeight=420,VerticalScrollBarVisibility=ScrollBarVisibility.Auto})));p.Children.Add(tabs);
+        Tab(settingsTab=="history"?new HistoryPanel(c){Height=420}:settingsTab=="tools"?manual:settingsTab=="room"?new ScrollViewer{Content=new WarDogs.Multiplayer.RoomSettingsPanel(c),MaxHeight=420,VerticalScrollBarVisibility=ScrollBarVisibility.Auto}:configScroll);settingsTab="config";p.Children.Add(body);
         notice=Text("",10,blue);notice.TextWrapping=TextWrapping.Wrap;var footer=Back(notice);footer.Margin=new Thickness(0,10,0,0);p.Children.Add(footer);
     }
     void Render()

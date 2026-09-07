@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net10.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable></PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../src/Core.cs" Link="Core.cs" />
+    <Compile Include="../src/Multiplayer/Protocol.cs" Link="Protocol.cs" />
+    <Compile Include="../src/Multiplayer/Identity.cs" Link="Identity.cs" />
+    <Compile Include="../src/Multiplayer/RoomState.cs" Link="RoomState.cs" />
+    <Compile Include="../src/Multiplayer/RoomClient.cs" Link="RoomClient.cs" />
+  </ItemGroup>
+</Project>

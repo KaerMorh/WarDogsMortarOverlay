@@ -1,0 +1,4 @@
+**/*_test.go
+wardogs-server*
+*.exe
+.env*

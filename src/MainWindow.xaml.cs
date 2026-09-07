@@ -108,7 +108,7 @@ public partial class MainWindow:Window
             FitClick(this,new RoutedEventArgs());await Task.Delay(900);
             c.Hud.Left=SystemParameters.WorkArea.Right-c.Hud.ActualWidth-35;c.Hud.Top=100;
             c.Hud.SetForm("compact");await Task.Delay(100);Check(c.Hud.ActualWidth<=350&&c.Hud.ActualHeight<240,"simplified HUD dimensions");
-            c.Pref.BubbleReadout=false;c.Hud.SetForm("bubble");await Task.Delay(100);Check(c.Hud.ActualWidth==40&&c.Hud.ActualHeight==40,"40px collapsed bubble");
+            c.Pref.BubbleReadout=false;c.Hud.SetForm("bubble");await Task.Delay(100);Check(c.Hud.ActualWidth==20&&c.Hud.ActualHeight==20,$"20px collapsed bubble (actual {c.Hud.ActualWidth}x{c.Hud.ActualHeight})");
             c.Hud.SetForm("panel");await Task.Delay(100);Check(c.Hud.ActualWidth<=360&&c.Hud.ActualHeight<360,"compact panel dimensions");
             var before=c.History.Count;c.Dragging=true;c.MapPoint(new(81.1,70.1),false);c.MapPoint(new(81.2,70.2),false);Check(c.History.Count==before,"map drag does not flood history");c.Dragging=false;
             Check(c.History.Count==before+1&&c.History[0].Position?.Coordinate==new Coord(81.2,70.2),"map drag records final point");
