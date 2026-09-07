@@ -1,5 +1,5 @@
 #ifndef AppVersion
-  #define AppVersion "0.6.1"
+  #define AppVersion "0.6.2"
 #endif
 #ifndef PayloadDir
   #error PayloadDir must point to a clean release payload

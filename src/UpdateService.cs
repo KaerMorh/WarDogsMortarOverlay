@@ -12,6 +12,8 @@ public sealed class UpdateService
     readonly HttpClient http;
     readonly string? publicKey;
     readonly string cacheRoot;
+    readonly UpdateCache cache;
+    byte[]? manifestBytes, manifestSignature;
     CancellationTokenSource? cancellation;
     string? downloaded;
     public event Action? Changed;
@@ -30,10 +32,35 @@ public sealed class UpdateService
         this.controller = controller;
         this.http = http; this.publicKey = publicKey;
         this.cacheRoot = cacheRoot ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WarDogsOverlay", "Updates");
+        cache = new UpdateCache(this.cacheRoot);
         http.DefaultRequestHeaders.UserAgent.ParseAdd("WarDogsOverlay/" + CurrentVersion);
     }
     void Refresh() => Changed?.Invoke();
     public void Cancel() => cancellation?.Cancel();
+    async Task<string> ReadKeyAsync()
+    {
+        if (publicKey != null) return publicKey;
+        using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("WarDogs.UpdatePublicKey")!;
+        using var reader = new StreamReader(stream); return await reader.ReadToEndAsync();
+    }
+    public async Task RestoreAsync()
+    {
+        if (Busy || controller.Demo) return;
+        Busy = true; Status = "正在检查已下载的更新…"; Refresh();
+        try
+        {
+            Available = null; downloaded = null; Progress = 0;
+            var saved = await cache.RestoreAsync(await ReadKeyAsync(), UpdateManifest.ParseVersion(CurrentVersion));
+            if (saved is {} value)
+            {
+                Available = value.Manifest; downloaded = value.Path; Progress = 100;
+                Status = "已恢复下载完成的更新，可以重启安装";
+            }
+            else Status = "尚未检查更新";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { Status = "无法读取更新缓存，可重新检查更新"; }
+        finally { Busy = false; Refresh(); }
+    }
     public async Task CheckAsync()
     {
         if (Busy) return;
@@ -44,23 +71,20 @@ public sealed class UpdateService
             // Both files can change during publication; signature failure is safe and retryable.
             var bytes = await GetSmallAsync(UpdateManifest.Feed, timeout.Token);
             var signature = await GetSmallAsync(UpdateManifest.Feed + ".sig", timeout.Token);
-            var key = publicKey;
-            if (key == null)
-            {
-                using var keyStream = Assembly.GetExecutingAssembly().GetManifestResourceStream("WarDogs.UpdatePublicKey")!;
-                using var reader = new StreamReader(keyStream);
-                key = await reader.ReadToEndAsync(timeout.Token);
-            }
-            var manifest = UpdateManifest.Verify(bytes, signature, key);
+            var manifest = UpdateManifest.Verify(bytes, signature, await ReadKeyAsync());
+            manifestBytes = bytes; manifestSignature = signature;
             if (UpdateManifest.ParseVersion(manifest.Version) > UpdateManifest.ParseVersion(CurrentVersion))
             {
-                if (Available != manifest) downloaded = null;
-                Available = manifest; Status = Ready ? "下载完成，可以重启安装" : "发现新版本 " + manifest.Version;
+                downloaded = await cache.FindAsync(manifest, timeout.Token);
+                if (downloaded != null && !controller.Demo) cache.Save(Path.GetDirectoryName(downloaded)!, bytes, signature);
+                Available = manifest; Progress = Ready ? 100 : 0;
+                Status = Ready ? "下载完成，可以重启安装" : "发现新版本 " + manifest.Version;
             }
             else { Available = null; downloaded = null; Status = "当前已是最新版本"; }
+            if (!controller.Demo) cache.CleanExcept(downloaded);
         }
         catch (OperationCanceledException) { Status = "检查超时，稍后可重试；当前版本可继续使用"; }
-        catch (Exception ex) when (ex is HttpRequestException or IOException or InvalidDataException or System.Security.Cryptography.CryptographicException or JsonException)
+        catch (Exception ex) when (ex is HttpRequestException or IOException or UnauthorizedAccessException or InvalidDataException or System.Security.Cryptography.CryptographicException or JsonException)
         { Status = "检查失败：" + ex.Message + "；可稍后重试"; }
         finally { Busy = false; Refresh(); }
     }
@@ -77,7 +101,7 @@ public sealed class UpdateService
     }
     public async Task DownloadAsync()
     {
-        if (Busy || Available is not {} manifest) return;
+        if (Busy || Ready || Available is not {} manifest) return;
         if (controller.Demo) { Status = "演示模式不下载或安装更新"; Refresh(); return; }
         if (!Installed) { Status = "当前为便携版，请先通过发布页安装一次安装版"; Refresh(); return; }
         using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(30)); cancellation = timeout;
@@ -86,7 +110,8 @@ public sealed class UpdateService
         var partial = Path.Combine(directory, "Setup.exe.part");
         try
         {
-            Directory.CreateDirectory(directory);
+            directory = cache.CreateDirectory(); partial = Path.Combine(directory, "Setup.exe.part");
+            cache.Save(directory, manifestBytes!, manifestSignature!);
             using var response = await http.GetAsync(manifest.Url, HttpCompletionOption.ResponseHeadersRead, timeout.Token);
             response.EnsureSuccessStatusCode();
             if (response.Content.Headers.ContentLength is {} length && length != manifest.Size) throw new InvalidDataException("安装包大小不匹配");
@@ -105,13 +130,14 @@ public sealed class UpdateService
             await manifest.VerifyFileAsync(partial, timeout.Token);
             var target = Path.Combine(directory, "Setup.exe"); File.Move(partial, target);
             downloaded = target; Progress = 100; Status = "下载完成，点击“重启并安装”完成更新";
+            cache.CleanExcept(downloaded);
         }
         catch (OperationCanceledException) { Status = "下载已取消或超时，可重新下载"; }
         catch (Exception ex) when (ex is HttpRequestException or IOException or InvalidDataException or UnauthorizedAccessException)
         { Status = "下载失败：" + ex.Message; }
         finally
         {
-            try { if (File.Exists(partial)) File.Delete(partial); } catch (IOException) { }
+            try { if (File.Exists(partial)) File.Delete(partial); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
             cancellation = null; Busy = false; Refresh();
         }
     }

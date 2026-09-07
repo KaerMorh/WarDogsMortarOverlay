@@ -8,7 +8,8 @@ public class SettingsPanel:StackPanel
     public SettingsPanel(Controller c,bool compact=false)
     {
         TextBlock Label(string t,double size=12)=>new(){Text=t,FontSize=size,Foreground=(Brush)new BrushConverter().ConvertFromString("#ACB8CA")!,TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,5,0,6)};
-        Children.Add(new UpdatePanel(c));
+        Children.Add(new Border { Child=new UpdatePanel(c), Background=(Brush)new BrushConverter().ConvertFromString("#202E42")!, BorderBrush=(Brush)new BrushConverter().ConvertFromString("#536781")!, BorderThickness=new Thickness(1), CornerRadius=new CornerRadius(8), Padding=new Thickness(12), Margin=new Thickness(0,0,0,12) });
+        Children.Add(new Border { Height=2, Background=(Brush)new BrushConverter().ConvertFromString("#536781")!, Margin=new Thickness(0,0,0,12) });
         Children.Add(Label("快捷键",16));Children.Add(Label("直接输入组合键名称，或点“录入”后按键；每项单独保存。",11));
         foreach(var item in Controller.Actions)
         {

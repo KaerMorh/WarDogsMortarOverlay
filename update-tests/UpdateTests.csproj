@@ -7,5 +7,7 @@
   <ItemGroup>
     <Compile Include="../src/UpdateManifest.cs" Link="UpdateManifest.cs" />
     <Compile Include="../src/UpdateService.cs" Link="UpdateService.cs" />
+    <Compile Include="../src/UpdateCache.cs" Link="UpdateCache.cs" />
+    <Compile Include="../src/SingleInstance.cs" Link="SingleInstance.cs" />
   </ItemGroup>
 </Project>

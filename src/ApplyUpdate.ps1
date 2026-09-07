@@ -22,6 +22,9 @@ try {
     $arguments='/SP- /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /NOCLOSEAPPLICATIONS /RESTARTEXITCODE=3010 /DIR="'+$job.installDir+'" /LOG="'+$log+'"'
     $installer=Start-Process -FilePath $job.setup -ArgumentList $arguments -PassThru -Wait -WindowStyle Hidden
     if ($installer.ExitCode -ne 0) { throw ('安装未完成（代码 '+$installer.ExitCode+'）。请查看 '+$log+'，可使用安装包手动修复。') }
+    $installerLock.Dispose()
+    $installerLock=$null
+    try { Remove-Item -LiteralPath $job.setup -ErrorAction Stop } catch { } # Startup retries cache cleanup if Windows still holds the file.
     Start-Process -FilePath $appExe -WorkingDirectory $job.installDir -WindowStyle Hidden
 } catch {
     $message=$_.Exception.Message

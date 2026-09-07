@@ -17,7 +17,7 @@ public sealed class UpdatePanel : StackPanel
     public UpdatePanel(Controller c)
     {
         var service = c.Updates;
-        Margin = new Thickness(0, 0, 0, 20);
+        Margin = new Thickness(0);
         var title = new TextBlock { FontSize = 16, Foreground = Brushes.White };
         var status = new TextBlock { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 8), Foreground = Brushes.LightSteelBlue };
         var notes = new TextBlock { TextWrapping = TextWrapping.Wrap, Foreground = Brushes.White, Margin = new Thickness(0, 0, 0, 8) };
@@ -32,6 +32,7 @@ public sealed class UpdatePanel : StackPanel
         var cancel = Button("取消下载"); cancel.Click += (_, _) => service.Cancel();
         var website = Button("发布页"); website.Click += (_, _) => { try { Process.Start(new ProcessStartInfo(UpdateManifest.Repository + "/releases/latest") { UseShellExecute = true }); } catch { c.Notify("无法打开浏览器"); } };
         Children.Add(title); Children.Add(status); Children.Add(notes); Children.Add(progress); Children.Add(auto); Children.Add(actions);
+        Children.Add(new TextBlock { Text="下载完成后退出可保留安装包，下次打开继续安装；升级后自动清理旧包。", TextWrapping=TextWrapping.Wrap, Foreground=Brushes.LightSteelBlue, FontSize=11, Margin=new Thickness(0,8,0,0) });
         void Render()
         {
             title.Text = "软件更新 · 当前 " + UpdateService.CurrentVersion;

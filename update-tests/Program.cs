@@ -5,6 +5,12 @@ using WarDogs;
 
 try
 {
+if (args.Length == 2 && args[0] == "--instance-probe")
+{
+    using var probe = new SingleInstance(() => {}, args[1]);
+    Environment.ExitCode = probe.IsOwner ? 0 : 2;
+    return;
+}
 int assertions = 0;
 void Check(bool condition, string message) { if (!condition) throw new Exception(message); assertions++; }
 void Reject(Action action, string message)
@@ -86,6 +92,44 @@ var pending = service.DownloadAsync(); await Task.Delay(20); service.Cancel(); a
 Check(!service.Busy && !service.Ready && service.Status.Contains("取消"), "cancel download returns to retryable state");
 handler.Delay = false; SetFeed(manifest); await service.DownloadAsync();
 Check(service.Ready, "retry after cancellation succeeds");
+var cacheRoot = Path.Combine(Controller.Root, "Downloads");
+var offline = new FeedHandler { Respond = _ => throw new HttpRequestException("offline") };
+var restored = new UpdateService(new Controller(), new HttpClient(offline), key, cacheRoot);
+await restored.RestoreAsync();
+Check(restored.Ready && restored.Available == manifest, "restart restores signed package without a network request");
+await restored.CheckAsync();
+Check(restored.Ready, "offline check keeps restored package installable");
+var cachedFile = Directory.GetFiles(cacheRoot, "Setup.exe", SearchOption.AllDirectories).Single();
+await File.WriteAllBytesAsync(cachedFile, new byte[payload.Length]);
+var corrupted = new UpdateService(new Controller(), new HttpClient(offline), key, cacheRoot);
+await corrupted.RestoreAsync();
+Check(!corrupted.Ready && !File.Exists(cachedFile), "restart rejects and cleans tampered cache");
+var legacyDir = Path.Combine(cacheRoot, Guid.NewGuid().ToString("N")); Directory.CreateDirectory(legacyDir);
+var legacyFile = Path.Combine(legacyDir, "Setup.exe"); await File.WriteAllBytesAsync(legacyFile, payload);
+var legacy = new UpdateService(new Controller(), new HttpClient(handler), key, cacheRoot);
+await legacy.RestoreAsync(); Check(!legacy.Ready && File.Exists(legacyFile), "unsigned legacy cache waits for signed online manifest");
+await legacy.CheckAsync(); Check(legacy.Ready && File.Exists(Path.Combine(legacyDir, "update.json.sig")), "legacy download is reused and gains signed metadata");
+var backup = Path.Combine(legacyDir, "settings.backup.json"); File.WriteAllText(backup, "keep");
+var staleDir = Path.Combine(cacheRoot, Guid.NewGuid().ToString("N")); Directory.CreateDirectory(staleDir);
+var staleFile = Path.Combine(staleDir, "Setup.exe"); File.WriteAllBytes(staleFile, [1,2,3]); File.SetLastWriteTimeUtc(staleFile, DateTime.UtcNow.AddDays(-8));
+var partialFile = Path.Combine(legacyDir, "Setup.exe.part"); File.WriteAllBytes(partialFile, [1]);
+await legacy.RestoreAsync(); Check(!File.Exists(staleFile) && !File.Exists(partialFile), "startup cleans stale legacy package and interrupted download");
+SetFeed(same); await legacy.CheckAsync();
+Check(!File.Exists(legacyFile) && File.ReadAllText(backup) == "keep", "obsolete package cleaned while settings backup survives");
+var instanceName = @"Local\WarDogsTests-" + Guid.NewGuid().ToString("N");
+using (var activation = new ManualResetEventSlim())
+{
+    using (var owner = new SingleInstance(() => activation.Set(), instanceName))
+    {
+        var start = new System.Diagnostics.ProcessStartInfo(Environment.ProcessPath!) { UseShellExecute=false, CreateNoWindow=true };
+        start.ArgumentList.Add("--instance-probe"); start.ArgumentList.Add(instanceName);
+        using var child = System.Diagnostics.Process.Start(start)!;
+        Check(child.WaitForExit(10000) && child.ExitCode == 2, "second process cannot acquire application instance");
+        Check(activation.Wait(3000), "second process signals original window to activate");
+    }
+    using var reopened = new SingleInstance(() => {}, instanceName);
+    Check(reopened.IsOwner, "application instance can restart after owner exits");
+}
 if ((args.Length == 2 && args[0] == "--release") || (args.Length == 3 && args[0] == "--available"))
 {
     var live = new UpdateService(new Controller(), new HttpClient { Timeout = Timeout.InfiniteTimeSpan }, File.ReadAllText(args[1]), Path.Combine(Controller.Root, "Live"));
