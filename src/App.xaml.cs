@@ -13,6 +13,7 @@ public partial class App:Application
         new System.Windows.Interop.WindowInteropHelper(main).EnsureHandle();
         Control.Hud=new HudWindow(Control);Control.Hud.Show();
         Control.InitializeNative(main);Control.Refresh();
-        if(e.Args.Contains("--verify")){main.Show();Dispatcher.BeginInvoke(new Action(async()=>await main.VerifyAndCapture()));}
+        if(!Control.Demo && Control.Pref.AutoCheckUpdates) _ = Control.Updates.CheckAsync();
+        if(e.Args.Contains("--verify")){main.Show();Dispatcher.BeginInvoke(new Action(async()=>{await main.VerifyAndCapture();if(e.Args.Contains("--verify-exit"))Control.Quit();}));}
     }
 }

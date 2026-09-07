@@ -1,4 +1,4 @@
-# WarDogs Overlay 0.5.0
+# WarDogs Overlay 0.6.0
 
 Windows 桌面火力计算器：C# / WPF HUD + WebView2 离线交互地图。
 
@@ -66,3 +66,9 @@ Windows 桌面火力计算器：C# / WPF HUD + WebView2 离线交互地图。
 安装包面向 Windows 10/11 x64，默认安装在当前用户的 LocalAppData/Programs/WarDogsOverlay，支持自定义安装位置、开始菜单入口、可选桌面快捷方式和卸载。自带 .NET 与两图离线瓦片；缺少 WebView2 时会运行微软引导安装器，此步骤需要联网。升级保留 UserData；安装包不包含开发者坐标、配置、地图缓存或验证截图。
 
 构建安装包：准备 Inno Setup 6 后运行 `./build-installer.ps1 -Iscc <ISCC.exe 路径>`，或使用项目 `.tools/inno/ISCC.exe`。构建脚本将从微软下载并校验 WebView2 引导安装器签名。成品与 SHA-256 位于 `artifacts/releases`。
+
+## v0.6.0 软件更新
+
+设置顶部提供检查更新、下载安装包、取消下载和重启安装。默认启动后后台检查；发现新版时，HUD、大地图和小球右键菜单的设置入口显示小红点。升级保留 UserData，并备份设置；不强制退出或重启电脑。更新清单验 RSA 签名，安装包验大小与 SHA-256。
+
+0.5.0 和便携版用户需要手动安装本版一次。开发与发布步骤见 [自动更新与发布指南](docs/自动更新与发布指南.md)。

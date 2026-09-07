@@ -36,3 +36,12 @@ Desktop.ini
 *.pem
 *.key
 .env
+
+# 更新签名私钥、凭据与本地诊断输出
+.env.*
+*.pfx
+*.p12
+*.private.xml
+**/Verification/
+# 更新公钥是客户端信任根，必须纳入版本控制
+!src/update-public.pem

@@ -49,6 +49,7 @@ public partial class MainWindow:Window
     }
     void Render()
     {
+        SettingsNav.Content=UpdatePanel.Badge("设置",c.Updates.HasUpdate);
         var s=c.State;var r=c.Result;MapTitle.Text=s.Map=="bakurani"?"BAKURANI":"OZETI";
         Distance.Text=r?.Distance.ToString("0")??"—";Azimuth.Text=r?.Azimuth?.ToString("0.0")??"—";
         Elevation.Text=r==null?"—":s.Weapon=="mortar"?r.Single?.ToString()??"—":$"{r.Low?.ToString()??"—"} / {r.High?.ToString()??"—"}";
@@ -123,7 +124,7 @@ public partial class MainWindow:Window
             var historyButton=Buttons(c.Hud).First(b=>b.DataContext is HistoryEntry {Position.Role:Awaiting.Target});var chosen=(HistoryEntry)historyButton.DataContext;
             historyButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));Check(c.State.Current.Target==chosen.Position!.Coordinate&&c.State.Current.Source=="历史恢复","actual history button restores coordinate");
             c.Hud.SetForm("compact");Buttons(c.Hud).First(b=>b.Content as string=="还原界面").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));Check(c.Hud.Form=="panel","dedicated restore button works");
-            Buttons(c.Hud).First(b=>b.Content as string=="设置").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Buttons(c.Hud).First(b=>b.Content is StackPanel badge&&badge.Children.OfType<TextBlock>().Any(t=>t.Text=="设置")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Buttons(c.Hud).First(b=>b.Content as string=="本次记录").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             c.Hud.UpdateLayout();Check(Buttons(c.Hud).Any(b=>b.DataContext is HistoryEntry),"settings history uses the same clickable records");
             Buttons(c.Hud).First(b=>b.Content as string=="快捷键 / 外观").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
@@ -137,12 +138,24 @@ public partial class MainWindow:Window
             c.Hud.SetForm("bubble");var menu=c.Hud.BubbleMenu();menu.Items.OfType<MenuItem>().First(m=>m.Header.ToString()!.StartsWith("小球极简化")).RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
             Check(c.Pref.BubbleReadout&&Texts(c.Hud).Any(t=>t.Text=="141(m)  839 MIL  45.0 度"),"bubble menu enables units-only readout");
             var inputMenu=c.Hud.BubbleMenu().Items.OfType<MenuItem>().First(m=>m.Header.ToString()=="输入模式");inputMenu.Items.OfType<MenuItem>().First(m=>m.Header.ToString()=="精确手动").RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));Check(c.State.Mode==InputMode.Manual,"bubble menu selects explicit input mode");
-            c.Hud.BubbleMenu().Items.OfType<MenuItem>().First(m=>m.Header.ToString()=="设置").RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));Check(c.Hud.Form=="settings","bubble menu opens settings");
+            c.Hud.BubbleMenu().Items.OfType<MenuItem>().First(m=>m.Header is StackPanel badge&&badge.Children.OfType<TextBlock>().Any(t=>t.Text=="设置")).RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));Check(c.Hud.Form=="settings","bubble menu opens settings");
             Buttons(c.Hud).First(b=>b.Content as string=="返回界面").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));Check(c.Hud.Form=="bubble","settings returns to bubble");c.Pref.BubbleReadout=false;c.State.Mode=InputMode.Smart;
             c.Pref.BubbleReadout=true;c.Hud.OpenSettings();Buttons(c.Hud).First(b=>b.Content as string=="橙色").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));c.Hud.SetForm("bubble");
             Check(Texts(c.Hud).Any(t=>t.Text.Contains(" MIL ")&&t.Foreground is SolidColorBrush {Color.R:255,Color.G:189,Color.B:135}),"bubble text color updates from settings");c.Pref.BubbleTextColor="#91C5FF";c.Pref.BubbleReadout=false;
             c.Hud.SetForm("panel");await Task.Delay(100);
+            var preview=new UpdateManifest("0.7.0","示例更新：改进地图交互，优化使用体验。",UpdateManifest.Repository+"/releases/download/v0.7.0/WarDogsOverlay-0.7.0-win-x64-Setup.exe",100,new string('0',64));
+            typeof(UpdateService).GetProperty(nameof(UpdateService.Available))!.SetValue(c.Updates,preview);
+            typeof(UpdateService).GetProperty(nameof(UpdateService.Status))!.SetValue(c.Updates,"发现新版本 0.7.0");
+            c.Refresh();
+            bool HasBadge(object content)=>content is StackPanel badge&&badge.Children.OfType<Border>().Any(b=>b.Visibility==Visibility.Visible&&b.Background==Brushes.OrangeRed);
+            Check(HasBadge(SettingsNav.Content),"main settings red dot for available update");
+            foreach(var form in new[]{"panel","compact"}){c.Hud.SetForm(form);Check(Buttons(c.Hud).Any(b=>HasBadge(b.Content)),"settings red dot in "+form);}
+            Check(c.Hud.BubbleMenu().Items.OfType<MenuItem>().Any(m=>HasBadge(m.Header)),"bubble menu settings red dot");
+            c.Hud.OpenSettings();c.Hud.UpdateLayout();Check(Texts(c.Hud).Any(t=>t.Text.StartsWith("软件更新"))&&Buttons(c.Hud).Any(b=>b.Content as string=="下载更新"&&b.IsVisible),"settings exposes available update and download action");
+            c.Hud.SetForm("panel");
             await ExportVisuals(dir);log.Add("PASS native WPF and WebView captures exported");
+            typeof(UpdateService).GetProperty(nameof(UpdateService.Available))!.SetValue(c.Updates,null);c.Refresh();
+            Check(!HasBadge(SettingsNav.Content)&&!Buttons(c.Hud).Any(b=>HasBadge(b.Content)),"settings red dot clears when update is no longer available");
             File.WriteAllLines(Path.Combine(dir,"integration.txt"),log);
             c.Notify("集成验证完成 · 演示数据，可直接拖动地图标记");
         }

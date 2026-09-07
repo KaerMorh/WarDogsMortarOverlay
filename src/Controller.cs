@@ -19,6 +19,7 @@ public record HistoryEntry(DateTime Time,string Message,PositionUpdate? Position
 }
 public class Preferences
 {
+    public bool AutoCheckUpdates{get;set;}=true;
     public Session Session{get;set;}=new();
     public Dictionary<string,string> Keys{get;set;}=new(){{"origin","Ctrl+Alt+1"},{"target","Ctrl+Alt+2"},{"pause","Ctrl+Alt+P"},{"hud","Ctrl+Alt+H"},{"mode","Ctrl+Alt+M"},{"map","Ctrl+Alt+G"}};
     public double HudLeft{get;set;}=double.NaN;public double HudTop{get;set;}=80;
@@ -41,6 +42,7 @@ public class Controller
     public MainWindow Main=null!;public HudWindow Hud=null!;
     public Preferences Pref{get;}
     public bool Demo{get;}
+    public UpdateService Updates{get;}
     bool dragging;PositionUpdate? dragUpdate;
     public bool Dragging{get=>dragging;set{dragging=value;if(!value&&dragUpdate is {} p){dragUpdate=null;RecordPosition(p);}}}
     public Coord? Pending{get;private set;}
@@ -58,7 +60,7 @@ public class Controller
     DispatcherTimer saveTimer=new(){Interval=TimeSpan.FromMilliseconds(700)};
     public Controller(bool demo)
     {
-        Demo=demo;Pref=new();
+        Demo=demo;Pref=new();Updates=new UpdateService(this);Updates.Changed+=()=>Updated?.Invoke();
         if(!demo)try{var path=Path.Combine(UserDir,"settings.json");if(File.Exists(path))Pref=JsonSerializer.Deserialize<Preferences>(File.ReadAllText(path),Json)??new();}catch{Notices.Add("设置读取失败 · 使用默认值");}
         State=Pref.Session;
         if(!Enum.IsDefined(State.Mode))State.Mode=InputMode.Smart;

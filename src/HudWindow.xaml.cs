@@ -10,7 +10,7 @@ public partial class HudWindow:Window
 {
     readonly Controller c;public string Form{get;private set;}="panel";string backForm="panel";
     TextBlock? distance,mil,azimuth,status,notice,positions;Button? mode,map,weapon,pause,origin,target,latest;Border? shell;
-    Expander? history;TextBlock? hiddenKey;
+    Expander? history;TextBlock? hiddenKey;Button? settingsButton;
     TextBlock? targetReadout,bubbleReadout;Border? targetBack;
     readonly List<(SolidColorBrush Brush,bool Button)> backgrounds=new();
     string settingsTab="config";
@@ -45,7 +45,7 @@ public partial class HudWindow:Window
     public void SetForm(string form)
     {
         if(form=="settings"&&Form!="settings")backForm=Form;
-        Form=form;distance=mil=azimuth=status=notice=positions=hiddenKey=null;mode=map=weapon=pause=origin=target=latest=null;history=null;shell=null;
+        Form=form;distance=mil=azimuth=status=notice=positions=hiddenKey=null;mode=map=weapon=pause=origin=target=latest=settingsButton=null;history=null;shell=null;
         targetReadout=bubbleReadout=null;targetBack=null;backgrounds.Clear();Surface.ContextMenu=null;
         c.IsRecordingHotkey=false;Surface.Children.Clear();Surface.LayoutTransform=new ScaleTransform(Math.Clamp(c.Pref.HudScale,.75,1.5),Math.Clamp(c.Pref.HudScale,.75,1.5));Opacity=1;
         if(form=="bubble")BuildBubble();else if(form=="compact")BuildCompact();else if(form=="settings")BuildSettings();else BuildPanel();
@@ -63,7 +63,7 @@ public partial class HudWindow:Window
         var caption=Back(Text("⠿ HUD",10,muted));caption.HorizontalAlignment=HorizontalAlignment.Left;caption.ToolTip="按住标题、数字或空白区域拖动";g.Children.Add(caption);
         var row=new StackPanel{Orientation=Orientation.Horizontal};
         row.Children.Add(Btn("大地图",()=>c.ShowMap(),"打开桌面战术大地图",tiny:true));
-        row.Children.Add(Btn("设置",()=>SetForm("settings"),"快捷键、外观、手动坐标与记录",tiny:true));
+        settingsButton=Btn("设置",()=>SetForm("settings"),"软件更新、快捷键、外观、手动坐标与记录",tiny:true);row.Children.Add(settingsButton);
         row.Children.Add(Btn("点化",()=>SetForm("bubble"),"收为小圆球 · 点击圆球还原简化界面",tiny:true));
         var toggle=Btn(compact?"还原界面":"简化",()=>SetForm(compact?"panel":"compact"),compact?"还原正常悬浮窗":"切换为简化悬浮窗",true,true);toggle.Width=76;toggle.Margin=new Thickness(0);toggle.FontWeight=FontWeights.Bold;
         row.Children.Add(toggle);Grid.SetColumn(row,1);g.Children.Add(row);return g;
@@ -122,7 +122,7 @@ public partial class HudWindow:Window
         var headerText=new FrameworkElementFactory(typeof(TextBlock));headerText.SetBinding(TextBlock.TextProperty,new Binding());headerText.SetValue(TextBlock.ForegroundProperty,Brushes.Black);var headerTemplate=new DataTemplate{VisualTree=headerText};
         MenuItem Item(string label,Action action,string? key=null){var item=new MenuItem{Header=label+(string.IsNullOrEmpty(key)?"":"    "+key),HeaderTemplate=headerTemplate,Foreground=Brushes.Black};item.Click+=(s,e)=>{e.Handled=true;action();};return item;}
         void Add(string label,Action action,string? key=null)=>menu.Items.Add(Item(label,action,key));
-        Add("打开大地图",()=>c.ShowMap());Add("设置",()=>OpenSettings());Add("还原界面",()=>SetForm("panel"));Add("简化界面",()=>SetForm("compact"));
+        Add("打开大地图",()=>c.ShowMap());var settingsItem=Item("设置",()=>OpenSettings());settingsItem.Header=UpdatePanel.Badge("设置",c.Updates.HasUpdate);settingsItem.HeaderTemplate=null;menu.Items.Add(settingsItem);Add("还原界面",()=>SetForm("panel"));Add("简化界面",()=>SetForm("compact"));
         var minimal=Item("小球极简化 · 右侧纯文字读数",()=>{c.Pref.BubbleReadout=!c.Pref.BubbleReadout;c.Refresh();c.Save();});minimal.IsCheckable=true;minimal.IsChecked=c.Pref.BubbleReadout;menu.Items.Add(minimal);menu.Items.Add(new Separator());
         foreach(var (id,label) in new[]{("origin","设置炮位 / 取消等待"),("target","选定目标"),("pause",c.State.Paused?"恢复接收":"暂停接收"),("hud","隐藏 HUD")})Add(label,()=>c.Act(id),c.Pref.Keys.GetValueOrDefault(id));
         var modeMenu=new MenuItem{Header="输入模式",HeaderTemplate=headerTemplate};foreach(var value in Enum.GetValues<InputMode>()){var item=Item(value==InputMode.Smart?"智能模式":value==InputMode.Manual?"精确手动":"连续目标",()=>{while(c.State.Mode!=value)c.Act("mode");});item.IsCheckable=true;item.IsChecked=c.State.Mode==value;modeMenu.Items.Add(item);}menu.Items.Add(modeMenu);
@@ -150,6 +150,7 @@ public partial class HudWindow:Window
     }
     void Render()
     {
+        if(settingsButton!=null)settingsButton.Content=UpdatePanel.Badge("设置",c.Updates.HasUpdate);
         var s=c.State;var r=c.Result;var color=s.Paused?muted:s.Waiting!=Awaiting.None||r is {InRange:false}?amber:blue;
         if(distance!=null)distance.Text=r?.Distance.ToString("0")??"—";if(azimuth!=null)azimuth.Text=r?.Azimuth?.ToString("0.0")??"—";
         if(mil!=null){mil.Text=r==null?"—":s.Weapon=="mortar"?r.Single?.ToString()??"—":$"{r.Low?.ToString()??"—"}/{r.High?.ToString()??"—"}";mil.FontSize=s.Weapon=="mortar"?(Form=="compact"?27:30):17;mil.Foreground=r is {InRange:false}?amber:blue;mil.ToolTip=s.Weapon=="spg"?"低抛 / 高抛":"迫击炮仰角";}
