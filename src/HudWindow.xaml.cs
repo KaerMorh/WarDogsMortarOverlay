@@ -11,7 +11,7 @@ public partial class HudWindow:Window
     readonly Controller c;public string Form{get;private set;}="panel";string backForm="panel";
     TextBlock? distance,mil,azimuth,status,notice,positions;Button? mode,map,weapon,pause,origin,target,latest;Border? shell;
     Expander? history;TextBlock? hiddenKey;Button? settingsButton;
-    TextBlock? targetReadout,bubbleReadout;Border? targetBack;
+    System.Windows.Shapes.Ellipse? bubbleDot; TextBlock? targetReadout,bubbleReadout;Border? targetBack;
     readonly List<(SolidColorBrush Brush,bool Button)> backgrounds=new();
     string settingsTab="config";
     readonly Brush ink=Brush("#F5F7FB"),muted=Brush("#D0DAE8"),blue=Brush("#91C5FF"),amber=Brush("#FFBD87");
@@ -19,7 +19,7 @@ public partial class HudWindow:Window
     static Brush Brush(string hex)=>(Brush)new BrushConverter().ConvertFromString(hex)!;
     public HudWindow(Controller control)
     {
-        c=control;InitializeComponent();c.Updated+=Render;Surface.ContextMenuOpening+=(s,e)=>{if(Form=="bubble")Surface.ContextMenu=BubbleMenu();};
+        c=control;InitializeComponent();c.Updated+=Render;Surface.ContextMenuOpening+=(s,e)=>{Surface.ContextMenu=BubbleMenu();};
         Left=double.IsFinite(c.Pref.HudLeft)?c.Pref.HudLeft:SystemParameters.WorkArea.Right-370;
         Top=double.IsFinite(c.Pref.HudTop)?c.Pref.HudTop:80;
         SetForm(c.Pref.HudForm is "compact" or "bubble"?c.Pref.HudForm:"panel");
@@ -46,11 +46,11 @@ public partial class HudWindow:Window
     {
         if(form=="settings"&&Form!="settings")backForm=Form;
         Form=form;distance=mil=azimuth=status=notice=positions=hiddenKey=null;mode=map=weapon=pause=origin=target=latest=settingsButton=null;history=null;shell=null;
-        targetReadout=bubbleReadout=null;targetBack=null;backgrounds.Clear();Surface.ContextMenu=null;
+        bubbleDot=null;targetReadout=bubbleReadout=null;targetBack=null;backgrounds.Clear();Surface.ContextMenu=null;
         c.IsRecordingHotkey=false;Surface.Children.Clear();Surface.LayoutTransform=new ScaleTransform(Math.Clamp(c.Pref.HudScale,.75,1.5),Math.Clamp(c.Pref.HudScale,.75,1.5));Opacity=1;
         if(form=="bubble")BuildBubble();else if(form=="compact")BuildCompact();else if(form=="settings")BuildSettings();else BuildPanel();
         if(form!="settings")c.Pref.HudForm=form;
-        Render();UpdateLayout();ClampPosition();c.Save();
+        Surface.ContextMenu=BubbleMenu();Render();UpdateLayout();ClampPosition();c.Save();
     }
     void ClampPosition(){Left=Math.Clamp(Left,SystemParameters.VirtualScreenLeft,SystemParameters.VirtualScreenLeft+SystemParameters.VirtualScreenWidth-Math.Max(44,ActualWidth));Top=Math.Clamp(Top,SystemParameters.VirtualScreenTop,SystemParameters.VirtualScreenTop+SystemParameters.VirtualScreenHeight-Math.Max(44,ActualHeight));}
     StackPanel Card(double width)
@@ -89,7 +89,7 @@ public partial class HudWindow:Window
     {
         var p=Card(348);p.Children.Add(Header(false));Selectors(p);Metrics(p,false);TargetLine(p);Actions(p);
         status=Text("",11,blue);status.TextTrimming=TextTrimming.CharacterEllipsis;p.Children.Add(Back(status));
-        notice=Text("",10,muted);notice.TextTrimming=TextTrimming.CharacterEllipsis;
+        notice=Text("",10,muted);notice.TextWrapping=TextWrapping.Wrap;
         latest=Btn("",()=>{if(c.History.FirstOrDefault() is {} h)c.RestoreHistory(h);});latest.Content=notice;latest.Margin=new Thickness(0,5,0,0);latest.HorizontalContentAlignment=HorizontalAlignment.Left;p.Children.Add(latest);
         history=new Expander{Header="展开本次记录 ▾",FontSize=11,Foreground=ink,Background=Brush("#F0141923"),Margin=new Thickness(0,4,0,0),Content=new HistoryPanel(c){Height=230}};
         history.Expanded+=(s,e)=>{UpdateLayout();ClampPosition();};p.Children.Add(history);
@@ -107,14 +107,15 @@ public partial class HudWindow:Window
     }
     void BuildBubble()
     {
-        status=Text("●",18,blue);status.HorizontalAlignment=HorizontalAlignment.Center;
+        status=Text("",10,blue);status.HorizontalAlignment=HorizontalAlignment.Center;status.TextAlignment=TextAlignment.Center;status.Effect=null; bubbleDot=new System.Windows.Shapes.Ellipse{Width=6,Height=6,Fill=blue,HorizontalAlignment=HorizontalAlignment.Center,VerticalAlignment=VerticalAlignment.Center}; var face=new Grid();face.Children.Add(bubbleDot);face.Children.Add(status);
         var row=new StackPanel{Orientation=Orientation.Horizontal};Surface.Children.Add(row);
-        row.Children.Add(new Border{Width=40,Height=40,CornerRadius=new CornerRadius(20),Background=Brush("#F0141923"),BorderBrush=Brush("#52637D"),BorderThickness=new Thickness(1),Child=status,Cursor=Cursors.Hand,ToolTip="单击展开 · 拖动移动 · 右键操作菜单"});
+        row.Children.Add(new Border{Width=20,Height=20,CornerRadius=new CornerRadius(10),VerticalAlignment=VerticalAlignment.Center,Background=Brush("#F0141923"),BorderBrush=Brush("#52637D"),BorderThickness=new Thickness(1),Child=face,Cursor=Cursors.Hand,ToolTip="单击展开 · 拖动移动 · 右键操作菜单"});
         bubbleReadout=Text("",18,blue);bubbleReadout.Margin=new Thickness(8,0,0,0);row.Children.Add(bubbleReadout);
         Surface.ContextMenu=BubbleMenu();
     }
-    void TargetLine(Panel panel){targetReadout=Text("",11,amber);targetBack=Back(targetReadout);targetBack.Margin=new Thickness(0,0,0,6);panel.Children.Add(targetBack);}
-    public void OpenSettings(string tab="config"){settingsTab=tab;SetForm("settings");}
+    static string TowerSuffix(string proximity)=>string.IsNullOrEmpty(proximity)||proximity=="200 m 内无 Tower"?"":" · "+proximity;
+    void TargetLine(Panel panel){targetReadout=Text("",11,amber);targetReadout.TextWrapping=TextWrapping.Wrap;targetBack=Back(targetReadout);targetBack.Margin=new Thickness(0,0,0,6);panel.Children.Add(targetBack);}
+    public void ShowForm(string form){SetForm(form);Show();Activate();} public void OpenSettings(string tab="config"){settingsTab=tab;ShowForm("settings");}
     public ContextMenu BubbleMenu()
     {
         var menu=new ContextMenu{Background=Brush("#F3F3F3"),Foreground=Brushes.Black};
@@ -122,9 +123,9 @@ public partial class HudWindow:Window
         var headerText=new FrameworkElementFactory(typeof(TextBlock));headerText.SetBinding(TextBlock.TextProperty,new Binding());headerText.SetValue(TextBlock.ForegroundProperty,Brushes.Black);var headerTemplate=new DataTemplate{VisualTree=headerText};
         MenuItem Item(string label,Action action,string? key=null){var item=new MenuItem{Header=label+(string.IsNullOrEmpty(key)?"":"    "+key),HeaderTemplate=headerTemplate,Foreground=Brushes.Black};item.Click+=(s,e)=>{e.Handled=true;action();};return item;}
         void Add(string label,Action action,string? key=null)=>menu.Items.Add(Item(label,action,key));
-        Add("打开大地图",()=>c.ShowMap());var settingsItem=Item("设置",()=>OpenSettings());settingsItem.Header=UpdatePanel.Badge("设置",c.Updates.HasUpdate);settingsItem.HeaderTemplate=null;menu.Items.Add(settingsItem);Add("还原界面",()=>SetForm("panel"));Add("简化界面",()=>SetForm("compact"));
+        Add("打开大地图",()=>c.ShowMap());var settingsItem=Item("设置",()=>OpenSettings());settingsItem.Header=UpdatePanel.Badge("设置",c.Updates.HasUpdate);settingsItem.HeaderTemplate=null;menu.Items.Add(settingsItem);Add("还原界面",()=>ShowForm("panel"));Add("简化界面",()=>ShowForm("compact"));Add("小球模式",()=>ShowForm("bubble"));
         var minimal=Item("小球极简化 · 右侧纯文字读数",()=>{c.Pref.BubbleReadout=!c.Pref.BubbleReadout;c.Refresh();c.Save();});minimal.IsCheckable=true;minimal.IsChecked=c.Pref.BubbleReadout;menu.Items.Add(minimal);menu.Items.Add(new Separator());
-        foreach(var (id,label) in new[]{("origin","设置炮位 / 取消等待"),("target","选定目标"),("pause",c.State.Paused?"恢复接收":"暂停接收"),("hud","隐藏 HUD")})Add(label,()=>c.Act(id),c.Pref.Keys.GetValueOrDefault(id));
+        foreach(var (id,label) in new[]{("origin","设置炮位 / 取消等待"),("target","选定目标"),("pause",c.State.Paused?"恢复接收":"暂停接收"),("hud",IsVisible?"隐藏 HUD":"显示 HUD")})Add(label,()=>c.Act(id),c.Pref.Keys.GetValueOrDefault(id));
         var modeMenu=new MenuItem{Header="输入模式",HeaderTemplate=headerTemplate};foreach(var value in Enum.GetValues<InputMode>()){var item=Item(value==InputMode.Smart?"智能模式":value==InputMode.Manual?"精确手动":"连续目标",()=>{while(c.State.Mode!=value)c.Act("mode");});item.IsCheckable=true;item.IsChecked=c.State.Mode==value;modeMenu.Items.Add(item);}menu.Items.Add(modeMenu);
         var mapMenu=new MenuItem{Header="地图",HeaderTemplate=headerTemplate};foreach(var (id,label) in new[]{("bakurani","Bakurani"),("ozeti","Ozeti")}){var item=Item(label,()=>{if(c.State.Map!=id)c.Act("map");});item.IsCheckable=true;item.IsChecked=c.State.Map==id;mapMenu.Items.Add(item);}menu.Items.Add(mapMenu);
         var weaponMenu=new MenuItem{Header="炮种",HeaderTemplate=headerTemplate};foreach(var (id,label) in new[]{("mortar","迫击炮"),("spg","SPH-2")}){var item=Item(label,()=>{if(c.State.Weapon!=id)c.Act("weapon");});item.IsCheckable=true;item.IsChecked=c.State.Weapon==id;weaponMenu.Items.Add(item);}menu.Items.Add(weaponMenu);
@@ -154,15 +155,15 @@ public partial class HudWindow:Window
         var s=c.State;var r=c.Result;var color=s.Paused?muted:s.Waiting!=Awaiting.None||r is {InRange:false}?amber:blue;
         if(distance!=null)distance.Text=r?.Distance.ToString("0")??"—";if(azimuth!=null)azimuth.Text=r?.Azimuth?.ToString("0.0")??"—";
         if(mil!=null){mil.Text=r==null?"—":s.Weapon=="mortar"?r.Single?.ToString()??"—":$"{r.Low?.ToString()??"—"}/{r.High?.ToString()??"—"}";mil.FontSize=s.Weapon=="mortar"?(Form=="compact"?27:30):17;mil.Foreground=r is {InRange:false}?amber:blue;mil.ToolTip=s.Weapon=="spg"?"低抛 / 高抛":"迫击炮仰角";}
-        if(status!=null){status.Text=Form=="bubble"?s.Paused?"Ⅱ":s.Waiting==Awaiting.Origin?"炮":s.Waiting==Awaiting.Target?"靶":"●":$"● {s.Status} · {r?.Status??"等待坐标"}";status.Foreground=color;status.ToolTip=$"{s.Status} · {r?.Status??"等待坐标"}\n{c.Notices.FirstOrDefault()}";}
-        if(weapon!=null)weapon.Content=(s.Weapon=="mortar"?"迫击炮":"SPH-2")+(Form=="compact"?"":" ↻");
+        if(status!=null){status.Text=Form=="bubble"?s.Paused?"Ⅱ":s.Waiting==Awaiting.Origin?"炮":s.Waiting==Awaiting.Target?"靶":"":$"● {s.Status} · {r?.Status??"等待坐标"}";status.Foreground=color;status.ToolTip=$"{s.Status} · {r?.Status??"等待坐标"}\n{c.Notices.FirstOrDefault()}";}
+        if(bubbleDot!=null){bubbleDot.Fill=color;bubbleDot.Visibility=s.Paused||s.Waiting!=Awaiting.None?Visibility.Collapsed:Visibility.Visible;} if(weapon!=null)weapon.Content=(s.Weapon=="mortar"?"迫击炮":"SPH-2")+(Form=="compact"?"":" ↻");
         ActionLabel(map,Form=="compact"?(s.Map=="bakurani"?"B图":"O图"):(s.Map=="bakurani"?"Bakurani ↻":"Ozeti ↻"),"map","切换地图 · 当前 "+s.Map);ActionLabel(mode,Form=="compact"?(s.Mode==InputMode.Smart?"智能":s.Mode==InputMode.Manual?"手动":"连续"):s.ModeText+" ↻","mode","切换坐标接收模式");
         ActionLabel(origin,"设炮位","origin","读取炮位 / 等待新坐标；等待时再按取消");ActionLabel(target,"选目标","target","读取目标 / 等待新坐标");ActionLabel(pause,s.Paused?"恢复":"暂停","pause","停止 / 恢复坐标接收");
-        var entry=c.History.FirstOrDefault();if(notice!=null){notice.Text=Form=="settings"?entry?.FullText??"":entry?.Title??"本次暂无记录";notice.Foreground=entry==null?muted:Brush(entry.Color);}
+        var entry=c.History.FirstOrDefault();if(notice!=null){notice.Text=Form=="settings"?entry?.FullText??"":entry==null?"本次暂无记录":entry.Title+TowerSuffix(entry.Proximity);notice.Foreground=entry==null?muted:Brush(entry.Color);}
         if(latest!=null)latest.ToolTip=entry?.Hint??"暂无记录";
         if(hiddenKey!=null){var key=c.Pref.Keys.GetValueOrDefault("hud","");hiddenKey.Text=key.Length>0?"隐藏 / 显示 HUD  "+key:"隐藏 / 显示 HUD：未绑定快捷键";}
         if(positions!=null)positions.Text=$"炮位  {s.Current.Origin?.ToString()??"未设置"}\n目标  {s.Current.Target?.ToString()??"未设置"}\n来源  {s.Current.Source}";
-        if(targetReadout!=null){targetReadout.Text="目标  "+s.Current.Target;targetBack!.Visibility=s.Current.Target==null?Visibility.Collapsed:Visibility.Visible;}
+        if(targetReadout!=null){targetReadout.Text="目标  "+s.Current.Target+(s.Current.Target is {} targetCoord?TowerSuffix(TowerProximity.Describe(targetCoord,c.Towers[s.Map])):"");targetBack!.Visibility=s.Current.Target==null?Visibility.Collapsed:Visibility.Visible;}
         if(bubbleReadout!=null){bubbleReadout.Foreground=BubbleColor();bubbleReadout.Visibility=c.Pref.BubbleReadout?Visibility.Visible:Visibility.Collapsed;bubbleReadout.Text=$"{r?.Distance.ToString("0")??"—"}(m)  {(s.Weapon=="mortar"?r?.Single?.ToString()??"—":$"{r?.Low?.ToString()??"—"}/{r?.High?.ToString()??"—"}")} MIL  {r?.Azimuth?.ToString("0.0")??"—"} 度";}
         foreach(var (brush,button) in backgrounds){var colorValue=brush.Color;colorValue.A=(byte)(255*(Form=="settings"?1:Math.Clamp(button?c.Pref.HudButtonOpacity:c.Pref.HudTileOpacity,0,1)));brush.Color=colorValue;}
         if(shell!=null)shell.Background=new SolidColorBrush(Color.FromArgb((byte)((Form=="settings"?1:Math.Clamp(c.Pref.HudOpacity,.25,1))*255),20,25,35));

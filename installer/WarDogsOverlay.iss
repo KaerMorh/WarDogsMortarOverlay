@@ -1,5 +1,5 @@
 #ifndef AppVersion
-  #define AppVersion "0.6.2"
+  #define AppVersion "0.6.3"
 #endif
 #ifndef PayloadDir
   #error PayloadDir must point to a clean release payload
@@ -26,6 +26,7 @@ OutputBaseFilename=WarDogsOverlay-{#AppVersion}-win-x64-Setup
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
+SetupIconFile=..\icon\app.ico
 UninstallDisplayIcon={app}\WarDogsOverlay.exe
 CloseApplications=yes
 RestartApplications=no

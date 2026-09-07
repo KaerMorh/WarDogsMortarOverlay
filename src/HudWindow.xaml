@@ -1,3 +1,3 @@
-<Window x:Class="WarDogs.HudWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="WARDOGS · HUD" SizeToContent="WidthAndHeight" WindowStyle="None" ResizeMode="NoResize" AllowsTransparency="True" Background="Transparent" Topmost="True" ShowInTaskbar="False" UseLayoutRounding="True">
+<Window x:Class="WarDogs.HudWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Icon="app.ico" Title="WARDOGS · HUD" SizeToContent="WidthAndHeight" WindowStyle="None" ResizeMode="NoResize" AllowsTransparency="True" Background="Transparent" Topmost="True" ShowInTaskbar="False" UseLayoutRounding="True">
  <Grid x:Name="Surface" Background="Transparent" PreviewMouseLeftButtonDown="PointerDown" PreviewMouseMove="PointerMove" PreviewMouseLeftButtonUp="PointerUp" LostMouseCapture="CaptureLost"/>
 </Window>

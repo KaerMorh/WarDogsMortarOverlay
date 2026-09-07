@@ -4,7 +4,7 @@ namespace WarDogs;
 public partial class App:Application
 {
     internal static Controller Control=null!;
-    SingleInstance? instance;
+    SingleInstance? instance; TrayIcon? tray;
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
@@ -18,7 +18,7 @@ public partial class App:Application
         var main=new MainWindow(Control);MainWindow=main;Control.Main=main;
         new System.Windows.Interop.WindowInteropHelper(main).EnsureHandle();
         Control.Hud=new HudWindow(Control);Control.Hud.Show();
-        Control.InitializeNative(main);Control.Refresh();
+        tray=new TrayIcon(Control);Control.InitializeNative(main);Control.Refresh();
         if(!Control.Demo) _ = InitializeUpdatesAsync();
         if(e.Args.Contains("--verify")){main.Show();Dispatcher.BeginInvoke(new Action(async()=>{await main.VerifyAndCapture();if(e.Args.Contains("--verify-exit"))Control.Quit();}));}
     }
@@ -27,5 +27,5 @@ public partial class App:Application
         await Control.Updates.RestoreAsync();
         if (Control.Pref.AutoCheckUpdates) await Control.Updates.CheckAsync();
     }
-    protected override void OnExit(ExitEventArgs e) { instance?.Dispose(); base.OnExit(e); }
+    protected override void OnExit(ExitEventArgs e) { tray?.Dispose();instance?.Dispose(); base.OnExit(e); }
 }
