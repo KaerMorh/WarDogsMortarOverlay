@@ -5,16 +5,18 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Effects;
 using System.Windows.Data;
+using System.Runtime.InteropServices;
 namespace WarDogs;
 public partial class HudWindow:Window
 {
     readonly Controller c;public string Form{get;private set;}="panel";string backForm="panel";
     TextBlock? distance,mil,azimuth,status,notice,positions;Button? mode,map,weapon,pause,origin,target,latest;Border? shell;
     Expander? history;TextBlock? hiddenKey;Button? settingsButton;
-    System.Windows.Shapes.Ellipse? bubbleDot; TextBlock? targetReadout,bubbleReadout;Border? targetBack;
+    System.Windows.Shapes.Ellipse? bubbleDot; TextBlock? originReadout,targetReadout,bubbleReadout;Border? originBack,targetBack,quickInputBack;TextBox? quickInput;Button? quickConfirm;
     readonly List<(SolidColorBrush Brush,bool Button)> backgrounds=new();
     string settingsTab="config";
     readonly Brush ink=Brush("#F5F7FB"),muted=Brush("#D0DAE8"),blue=Brush("#91C5FF"),amber=Brush("#FFBD87");
+    bool quickOrigin;
     Point? dragStart;double startLeft,startTop;bool moved;
     static Brush Brush(string hex)=>(Brush)new BrushConverter().ConvertFromString(hex)!;
     public HudWindow(Controller control)
@@ -27,13 +29,23 @@ public partial class HudWindow:Window
     TextBlock Text(string value,double size=12,Brush? color=null)=>new(){Text=value,FontSize=size,Foreground=color??ink,VerticalAlignment=VerticalAlignment.Center,Effect=new DropShadowEffect{Color=Colors.Black,BlurRadius=2,ShadowDepth=1,Opacity=.9}};
     SolidColorBrush LayerBrush(string hex,bool button=false){var brush=new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));backgrounds.Add((brush,button));return brush;}
     Border Back(UIElement child)=>new(){Background=LayerBrush("#141923"),CornerRadius=new CornerRadius(4),Padding=new Thickness(5,3,5,3),Child=child};
-    Button Btn(string text,Action action,string hint="",bool primary=false,bool tiny=false)
+    Button Btn(string text,Action action,string hint="",bool primary=false,bool tiny=false,Action? doubleAction=null)
     {
-        var b=new Button{Content=text,Padding=tiny?new Thickness(6,4,6,4):new Thickness(7,5,7,5),Margin=new Thickness(0,0,4,0),FontSize=tiny?11:12,ToolTip=hint.Length>0?hint:text,Background=LayerBrush(primary?"#315781":"#232E40",true)};
-        var border=new FrameworkElementFactory(typeof(Border),"ButtonShell");border.SetBinding(Border.BackgroundProperty,new Binding("Background"){RelativeSource=RelativeSource.TemplatedParent});border.SetBinding(Border.PaddingProperty,new Binding("Padding"){RelativeSource=RelativeSource.TemplatedParent});border.SetValue(Border.CornerRadiusProperty,new CornerRadius(5));border.SetValue(Border.BorderThicknessProperty,new Thickness(1));border.SetValue(Border.BorderBrushProperty,Brushes.Transparent);
+        var b=new Button{Content=text,Padding=tiny?new Thickness(6,4,6,4):new Thickness(7,5,7,5),Margin=new Thickness(0,0,4,0),FontSize=tiny?11:12,ToolTip=hint.Length>0?hint:text,Background=LayerBrush(primary?"#315781":"#232E40",true),BorderBrush=Brushes.Transparent,BorderThickness=new Thickness(1)};
+        var border=new FrameworkElementFactory(typeof(Border),"ButtonShell");border.SetBinding(Border.BackgroundProperty,new Binding("Background"){RelativeSource=RelativeSource.TemplatedParent});border.SetBinding(Border.PaddingProperty,new Binding("Padding"){RelativeSource=RelativeSource.TemplatedParent});border.SetBinding(Border.BorderThicknessProperty,new Binding("BorderThickness"){RelativeSource=RelativeSource.TemplatedParent});border.SetBinding(Border.BorderBrushProperty,new Binding("BorderBrush"){RelativeSource=RelativeSource.TemplatedParent});border.SetValue(Border.CornerRadiusProperty,new CornerRadius(5));
         var content=new FrameworkElementFactory(typeof(ContentPresenter));content.SetBinding(ContentPresenter.ContentProperty,new Binding("Content"){RelativeSource=RelativeSource.TemplatedParent});content.SetValue(HorizontalAlignmentProperty,HorizontalAlignment.Center);border.AppendChild(content);
         var template=new ControlTemplate(typeof(Button)){VisualTree=border};var hover=new Trigger{Property=IsMouseOverProperty,Value=true};hover.Setters.Add(new Setter(Border.BorderBrushProperty,blue,"ButtonShell"));template.Triggers.Add(hover);b.Template=template;
-        ToolTipService.SetInitialShowDelay(b,250);ToolTipService.SetShowDuration(b,30000);b.Click+=(s,e)=>action();return b;
+        ToolTipService.SetInitialShowDelay(b,250);ToolTipService.SetShowDuration(b,30000);
+        if(doubleAction==null)b.Click+=(s,e)=>action();
+        else
+        {
+            var timer=new System.Windows.Threading.DispatcherTimer{Interval=TimeSpan.FromMilliseconds(GetDoubleClickTime())};
+            timer.Tick+=(s,e)=>{timer.Stop();action();};
+            b.Click+=(s,e)=>{timer.Stop();timer.Start();};
+            b.PreviewMouseLeftButtonDown+=(s,e)=>{if(e.ClickCount<2)return;timer.Stop();e.Handled=true;doubleAction();};
+            b.Unloaded+=(s,e)=>timer.Stop();
+        }
+        return b;
     }
     void ActionLabel(Button? button,string label,string action,string hint)
     {
@@ -46,7 +58,7 @@ public partial class HudWindow:Window
     {
         if(form=="settings"&&Form!="settings")backForm=Form;
         Form=form;distance=mil=azimuth=status=notice=positions=hiddenKey=null;mode=map=weapon=pause=origin=target=latest=settingsButton=null;history=null;shell=null;
-        bubbleDot=null;targetReadout=bubbleReadout=null;targetBack=null;backgrounds.Clear();Surface.ContextMenu=null;
+        bubbleDot=null;originReadout=targetReadout=bubbleReadout=null;originBack=targetBack=quickInputBack=null;quickInput=null;quickConfirm=null;backgrounds.Clear();Surface.ContextMenu=null;
         c.IsRecordingHotkey=false;Surface.Children.Clear();Surface.LayoutTransform=new ScaleTransform(Math.Clamp(c.Pref.HudScale,.75,1.5),Math.Clamp(c.Pref.HudScale,.75,1.5));Opacity=1;
         if(form=="bubble")BuildBubble();else if(form=="compact")BuildCompact();else if(form=="settings")BuildSettings();else BuildPanel();
         if(form!="settings")c.Pref.HudForm=form;
@@ -82,12 +94,12 @@ public partial class HudWindow:Window
     }
     void Actions(Panel parent)
     {
-        var row=new UniformGrid{Columns=3,Margin=new Thickness(0,0,0,6)};origin=Btn("",()=>c.Act("origin"));target=Btn("",()=>c.Act("target"),primary:true);pause=Btn("",()=>c.Act("pause"));pause.Margin=new Thickness(0);
+        var row=new UniformGrid{Columns=3,Margin=new Thickness(0,0,0,6)};origin=Btn("",()=>c.Act("origin"),doubleAction:()=>OpenCoordinateInput(true));target=Btn("",()=>c.Act("target"),primary:true,doubleAction:()=>OpenCoordinateInput(false));pause=Btn("",()=>c.Act("pause"));pause.Margin=new Thickness(0);
         row.Children.Add(origin);row.Children.Add(target);row.Children.Add(pause);parent.Children.Add(row);
     }
     void BuildPanel()
     {
-        var p=Card(348);p.Children.Add(Header(false));Selectors(p);Metrics(p,false);TargetLine(p);Actions(p);
+        var p=Card(348);p.Children.Add(Header(false));Selectors(p);Metrics(p,false);CoordinateLine(p);Actions(p);
         status=Text("",11,blue);status.TextTrimming=TextTrimming.CharacterEllipsis;p.Children.Add(Back(status));
         notice=Text("",10,muted);notice.TextWrapping=TextWrapping.Wrap;
         latest=Btn("",()=>{if(c.History.FirstOrDefault() is {} h)c.RestoreHistory(h);});latest.Content=notice;latest.Margin=new Thickness(0,5,0,0);latest.HorizontalContentAlignment=HorizontalAlignment.Left;p.Children.Add(latest);
@@ -97,9 +109,9 @@ public partial class HudWindow:Window
     }
     void BuildCompact()
     {
-        var p=new StackPanel{Width=326,Margin=new Thickness(11)};Surface.Children.Add(p);p.Children.Add(Header(true));Metrics(p,true);TargetLine(p);
+        var p=new StackPanel{Width=326,Margin=new Thickness(11)};Surface.Children.Add(p);p.Children.Add(Header(true));Metrics(p,true);CoordinateLine(p);
         var row=new UniformGrid{Columns=6,Margin=new Thickness(0,0,0,6)};
-        origin=Btn("",()=>c.Act("origin"),tiny:true);target=Btn("",()=>c.Act("target"),primary:true,tiny:true);pause=Btn("",()=>c.Act("pause"),tiny:true);
+        origin=Btn("",()=>c.Act("origin"),tiny:true,doubleAction:()=>OpenCoordinateInput(true));target=Btn("",()=>c.Act("target"),primary:true,tiny:true,doubleAction:()=>OpenCoordinateInput(false));pause=Btn("",()=>c.Act("pause"),tiny:true);
         weapon=Btn("",()=>c.Act("weapon"),"切换迫击炮 / SPH-2",tiny:true);map=Btn("",()=>c.Act("map"),tiny:true);mode=Btn("",()=>c.Act("mode"),tiny:true);
         foreach(var button in new[]{origin,target,pause,weapon,map,mode}){button.Padding=new Thickness(2,4,2,4);button.Margin=new Thickness(0,0,3,0);row.Children.Add(button);}mode.Margin=new Thickness(0);p.Children.Add(row);
         status=Text("",10,blue);status.TextTrimming=TextTrimming.CharacterEllipsis;p.Children.Add(Back(status));
@@ -114,7 +126,25 @@ public partial class HudWindow:Window
         Surface.ContextMenu=BubbleMenu();
     }
     static string TowerSuffix(string proximity)=>string.IsNullOrEmpty(proximity)||proximity=="200 m 内无 Tower"?"":" · "+proximity;
-    void TargetLine(Panel panel){targetReadout=Text("",11,amber);targetReadout.TextWrapping=TextWrapping.Wrap;targetBack=Back(targetReadout);targetBack.Margin=new Thickness(0,0,0,6);panel.Children.Add(targetBack);}
+    void CoordinateLine(Panel panel)
+    {
+        targetReadout=Text("",11,amber);targetReadout.TextWrapping=TextWrapping.Wrap;targetBack=Back(targetReadout);targetBack.Margin=new Thickness(0,0,0,4);panel.Children.Add(targetBack);
+        originReadout=Text("",11,blue);originReadout.TextWrapping=TextWrapping.Wrap;originBack=Back(originReadout);originBack.Margin=new Thickness(0,0,0,6);panel.Children.Add(originBack);
+
+        var inputRow=new Grid();inputRow.ColumnDefinitions.Add(new(){Width=new GridLength(1,GridUnitType.Star)});inputRow.ColumnDefinitions.Add(new(){Width=GridLength.Auto});
+        quickInput=new TextBox{Padding=new Thickness(5,4,5,4),Margin=new Thickness(0,0,5,0),ToolTip="粘贴 x12.11 y11.11，按回车确认"};quickInput.KeyDown+=(s,e)=>{if(e.Key==Key.Enter){SubmitCoordinateInput();e.Handled=true;}else if(e.Key==Key.Escape){CloseCoordinateInput();e.Handled=true;}};inputRow.Children.Add(quickInput);
+        quickConfirm=Btn("确认",SubmitCoordinateInput,primary:true,tiny:true);quickConfirm.Margin=new Thickness(0);Grid.SetColumn(quickConfirm,1);inputRow.Children.Add(quickConfirm);
+        quickInputBack=Back(inputRow);quickInputBack.Margin=new Thickness(0,0,0,6);quickInputBack.Visibility=Visibility.Collapsed;panel.Children.Add(quickInputBack);
+    }
+    void OpenCoordinateInput(bool originMode)
+    {
+        if(quickInput==null||quickInputBack==null||quickConfirm==null)return;quickOrigin=originMode;quickInput.Text="";quickInput.ToolTip=originMode?"粘贴炮位坐标，按回车确认":"粘贴目标坐标，按回车确认";quickConfirm.Content=originMode?"设炮位":"设目标";quickInputBack.Visibility=Visibility.Visible;UpdateLayout();ClampPosition();Dispatcher.BeginInvoke(()=>{quickInput.Focus();Keyboard.Focus(quickInput);});
+    }
+    void SubmitCoordinateInput()
+    {
+        if(quickInput==null)return;if(Coordinates.Parse(quickInput.Text,true)==null){c.Manual(quickInput.Text,quickOrigin);quickInput.SelectAll();return;}c.Manual(quickInput.Text,quickOrigin);CloseCoordinateInput();
+    }
+    void CloseCoordinateInput(){if(quickInputBack==null)return;quickInputBack.Visibility=Visibility.Collapsed;Keyboard.ClearFocus();UpdateLayout();ClampPosition();}
     public void ShowForm(string form){SetForm(form);Show();Activate();} public void OpenSettings(string tab="config"){settingsTab=tab;ShowForm("settings");}
     public ContextMenu BubbleMenu()
     {
@@ -159,12 +189,20 @@ public partial class HudWindow:Window
         if(status!=null){status.Text=Form=="bubble"?s.Paused?"Ⅱ":s.Waiting==Awaiting.Origin?"炮":s.Waiting==Awaiting.Target?"靶":"":$"● {s.Status} · {r?.Status??"等待坐标"}";status.Foreground=color;status.ToolTip=$"{s.Status} · {r?.Status??"等待坐标"}\n{c.Notices.FirstOrDefault()}";}
         if(bubbleDot!=null){bubbleDot.Fill=color;bubbleDot.Visibility=s.Paused||s.Waiting!=Awaiting.None?Visibility.Collapsed:Visibility.Visible;} if(weapon!=null)weapon.Content=(s.Weapon=="mortar"?"迫击炮":"SPH-2")+(Form=="compact"?"":" ↻");
         ActionLabel(map,Form=="compact"?(s.Map=="bakurani"?"B图":"O图"):(s.Map=="bakurani"?"Bakurani ↻":"Ozeti ↻"),"map","切换地图 · 当前 "+s.Map);ActionLabel(mode,Form=="compact"?(s.Mode==InputMode.Smart?"智能":s.Mode==InputMode.Manual?"手动":"连续"):s.ModeText+" ↻","mode","切换坐标接收模式");
-        ActionLabel(origin,"设炮位","origin","读取炮位 / 等待新坐标；等待时再按取消");ActionLabel(target,"选目标","target","读取目标 / 等待新坐标");ActionLabel(pause,s.Paused?"恢复":"暂停","pause","停止 / 恢复坐标接收");
+        ActionLabel(origin,"设炮位","origin","单击读取炮位 / 等待新坐标；双击粘贴输入；等待时再单击取消");ActionLabel(target,"选目标","target","单击读取目标 / 等待新坐标；双击粘贴输入");ActionLabel(pause,s.Paused?"恢复":"暂停","pause","停止 / 恢复坐标接收");
+        if(origin?.Background is SolidColorBrush originBrush)
+        {
+            var stateColor=(Color)ColorConverter.ConvertFromString(s.Waiting==Awaiting.Origin?"#A97822":"#232E40");
+            originBrush.Color=Color.FromArgb(originBrush.Color.A,stateColor.R,stateColor.G,stateColor.B);origin.BorderBrush=Brushes.Transparent;origin.BorderThickness=new Thickness(1);
+        }
         var entry=c.History.FirstOrDefault();if(notice!=null){notice.Text=Form=="settings"?entry?.FullText??"":entry==null?"本次暂无记录":entry.Title+TowerSuffix(entry.Proximity);notice.Foreground=entry==null?muted:Brush(entry.Color);}
         if(latest!=null)latest.ToolTip=entry?.Hint??"暂无记录";
         if(hiddenKey!=null){var key=c.Pref.Keys.GetValueOrDefault("hud","");hiddenKey.Text=key.Length>0?"隐藏 / 显示 HUD  "+key:"隐藏 / 显示 HUD：未绑定快捷键";}
         if(positions!=null)positions.Text=$"炮位  {s.Current.Origin?.ToString()??"未设置"}\n目标  {s.Current.Target?.ToString()??"未设置"}\n来源  {s.Current.Source}";
-        if(targetReadout!=null){targetReadout.Text="目标  "+s.Current.Target+(s.Current.Target is {} targetCoord?TowerSuffix(TowerProximity.Describe(targetCoord,c.Towers[s.Map])):"");targetBack!.Visibility=s.Current.Target==null?Visibility.Collapsed:Visibility.Visible;}
+        if(originReadout!=null)originReadout.Text="炮位  "+(s.Current.Origin?.ToString()??"未设置");
+        if(targetReadout!=null)targetReadout.Text="目标  "+(s.Current.Target?.ToString()??"未设置")+(s.Current.Target is {} targetCoord?TowerSuffix(TowerProximity.Describe(targetCoord,c.Towers[s.Map])):"");
+        if(targetBack!=null)targetBack.Visibility=s.Current.Target==null?Visibility.Collapsed:Visibility.Visible;
+        if(originBack!=null)originBack.Visibility=s.Current.Origin==null?Visibility.Collapsed:Visibility.Visible;
         if(bubbleReadout!=null){bubbleReadout.Foreground=BubbleColor();bubbleReadout.Visibility=c.Pref.BubbleReadout?Visibility.Visible:Visibility.Collapsed;bubbleReadout.Text=$"{r?.Distance.ToString("0")??"—"}(m)  {(s.Weapon=="mortar"?r?.Single?.ToString()??"—":$"{r?.Low?.ToString()??"—"}/{r?.High?.ToString()??"—"}")} MIL  {r?.Azimuth?.ToString("0.0")??"—"} 度";}
         foreach(var (brush,button) in backgrounds){var colorValue=brush.Color;colorValue.A=(byte)(255*(Form=="settings"?1:Math.Clamp(button?c.Pref.HudButtonOpacity:c.Pref.HudTileOpacity,0,1)));brush.Color=colorValue;}
         if(shell!=null)shell.Background=new SolidColorBrush(Color.FromArgb((byte)((Form=="settings"?1:Math.Clamp(c.Pref.HudOpacity,.25,1))*255),20,25,35));
@@ -189,4 +227,5 @@ public partial class HudWindow:Window
         if(dragStart==null)return;bool expand=Form=="bubble"&&!moved;dragStart=null;Surface.ReleaseMouseCapture();if(expand)SetForm("compact");ClampPosition();c.Save();e.Handled=true;
     }
     void CaptureLost(object s,MouseEventArgs e){dragStart=null;}
+    [DllImport("user32.dll")]static extern uint GetDoubleClickTime();
 }

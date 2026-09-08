@@ -109,7 +109,7 @@ public partial class MainWindow:Window
             c.Hud.Left=SystemParameters.WorkArea.Right-c.Hud.ActualWidth-35;c.Hud.Top=100;
             c.Hud.SetForm("compact");await Task.Delay(100);Check(c.Hud.ActualWidth<=350&&c.Hud.ActualHeight<240,"simplified HUD dimensions");
             c.Pref.BubbleReadout=false;c.Hud.SetForm("bubble");await Task.Delay(100);Check(c.Hud.ActualWidth==20&&c.Hud.ActualHeight==20,$"20px collapsed bubble (actual {c.Hud.ActualWidth}x{c.Hud.ActualHeight})");
-            c.Hud.SetForm("panel");await Task.Delay(100);Check(c.Hud.ActualWidth<=360&&c.Hud.ActualHeight<360,"compact panel dimensions");
+            c.Hud.SetForm("panel");await Task.Delay(100);Check(c.Hud.ActualWidth<=360&&c.Hud.ActualHeight<390,$"compact panel dimensions after separate origin line ({c.Hud.ActualWidth:0}x{c.Hud.ActualHeight:0})");
             var before=c.History.Count;c.Dragging=true;c.MapPoint(new(81.1,70.1),false);c.MapPoint(new(81.2,70.2),false);Check(c.History.Count==before,"map drag does not flood history");c.Dragging=false;
             Check(c.History.Count==before+1&&c.History[0].Position?.Coordinate==new Coord(81.2,70.2),"map drag records final point");
             var saved=c.History[0];Check(saved.Proximity.Contains("T1"),"coordinate record includes nearby Tower");
@@ -129,9 +129,21 @@ public partial class MainWindow:Window
             c.Hud.UpdateLayout();Check(Buttons(c.Hud).Any(b=>b.DataContext is HistoryEntry),"settings history uses the same clickable records");
             Buttons(c.Hud).First(b=>b.Content as string=="快捷键 / 外观").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             IEnumerable<TextBlock> Texts(DependencyObject root){for(int i=0;i<VisualTreeHelper.GetChildrenCount(root);i++){var child=VisualTreeHelper.GetChild(root,i);if(child is TextBlock text)yield return text;foreach(var nested in Texts(child))yield return nested;}}
+            IEnumerable<TextBox> EnumerableTextBoxes(DependencyObject root){for(int i=0;i<VisualTreeHelper.GetChildrenCount(root);i++){var child=VisualTreeHelper.GetChild(root,i);if(child is TextBox text)yield return text;foreach(var nested in EnumerableTextBoxes(child))yield return nested;}}
             c.Hud.SetForm("compact");c.Hud.UpdateLayout();Check(!Texts(c.Hud).Any(t=>t.Text.Contains("Ctrl+Alt")),"simplified buttons hide shortcut labels");
             var actionButtons=Buttons(c.Hud).Where(b=>b.Tag is string).ToArray();Check(actionButtons.Length==5&&actionButtons.Select(b=>Math.Round(b.TranslatePoint(new Point(),c.Hud).Y)).Distinct().Count()==1,"simplified actions share one row");
             c.State.SetTarget(new(90,90));foreach(var form in new[]{"panel","compact"}){c.Hud.SetForm(form);Check(Texts(c.Hud).Any(t=>t.Text.StartsWith("目标  x90.00")),"target remains visible out of range in "+form);}
+            c.State.SetOrigin(new(80.52,69.85),"验证");c.State.SetTarget(new(81.52,70.85),"验证");c.Hud.SetForm("compact");c.Hud.UpdateLayout();
+            string? ActionText(Button b)=>(b.Content as StackPanel)?.Children.OfType<TextBlock>().FirstOrDefault()?.Text;
+            var originAction=Buttons(c.Hud).First(b=>ActionText(b)=="设炮位");
+            Check(originAction.Background is SolidColorBrush {Color.R:35,Color.G:46,Color.B:64}&&originAction.BorderBrush==Brushes.Transparent,"origin button keeps its normal background after origin is set");
+            c.State.Current.Origin=null;c.Refresh();Check(originAction.Background is SolidColorBrush {Color.R:35,Color.G:46,Color.B:64}&&originAction.BorderBrush==Brushes.Transparent,"origin button keeps its original background when no origin is set");c.State.SetOrigin(new(80.52,69.85),"验证");c.State.SetTarget(new(81.52,70.85),"验证");
+            c.State.OriginAction(null);Check(originAction.Background is SolidColorBrush {Color.R:169,Color.G:120,Color.B:34}&&originAction.BorderBrush==Brushes.Transparent,"origin button has yellow background while waiting for copied coordinate");c.State.OriginAction(null);
+            var originLine=Texts(c.Hud).First(t=>t.Text.StartsWith("炮位  x80.52"));var targetLine=Texts(c.Hud).First(t=>t.Text.StartsWith("目标  x81.52"));
+            Check(targetLine.TranslatePoint(new Point(),c.Hud).Y<originLine.TranslatePoint(new Point(),c.Hud).Y,"persistent target line is restored with a separate origin line below");
+            typeof(HudWindow).GetMethod("OpenCoordinateInput",System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic)!.Invoke(c.Hud,new object[]{false});c.Hud.UpdateLayout();
+            var quickInput=EnumerableTextBoxes(c.Hud).Single(t=>t.IsVisible);quickInput.Text="x82.52 y71.85";Buttons(c.Hud).First(b=>b.IsVisible&&b.Content as string=="设目标").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(c.State.Current.Target==new Coord(82.52,71.85)&&!quickInput.IsVisible,"double-click coordinate editor accepts pasted target through confirm button");
             c.Pref.HudButtonOpacity=0;c.Pref.HudTileOpacity=0;c.Refresh();Check(Buttons(c.Hud).All(b=>b.Background is SolidColorBrush {Color.A:0}),"button backgrounds independently reach zero opacity");
             var metricLabel=Texts(c.Hud).First(t=>t.Text=="距离 m");var tile=(Border)VisualTreeHelper.GetParent(VisualTreeHelper.GetParent(metricLabel));Check(tile.Background is SolidColorBrush {Color.A:0}&&metricLabel.Opacity==1,"tile background opacity does not fade text");
             c.Pref.HudButtonOpacity=1;c.Pref.HudTileOpacity=.94;c.State.SetTarget(new(81.52,70.85),"演示");
