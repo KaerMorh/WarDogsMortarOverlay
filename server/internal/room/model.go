@@ -13,8 +13,7 @@ import (
 	"unicode/utf8"
 )
 
-const Protocol = 2
-const MaxSolverRefs = 32
+const Protocol = 3
 
 type Point struct {
 	Map string  `json:"map"`
@@ -32,6 +31,10 @@ func Same(a, b *Point) bool {
 func Equal(a, b *Point) bool  { return a == nil && b == nil || a != nil && b != nil && *a == *b }
 func validMap(s string) bool  { return s == "bakurani" || s == "ozeti" }
 func validRole(s string) bool { return s == "gunner" || s == "scout" }
+
+// Weapon ids mirror the client's weapons.json. The server only gates the
+// vocabulary; ranges and ballistics stay client-side.
+func validWeapon(s string) bool { return s == "mortar" || s == "spg" }
 
 var uuidPattern = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 var roomPattern = regexp.MustCompile(`^[a-z0-9_-]{4,32}$`)
@@ -62,12 +65,14 @@ type Identity struct {
 	UID  string `json:"uid"`
 	Name string `json:"name"`
 }
+
+// Tasks are publication records only. Solve attribution is derived on each
+// client from observed member state; the server never computes it.
 type Task struct {
 	ID        string    `json:"id"`
 	Sequence  int64     `json:"sequence"`
 	CreatedAt time.Time `json:"createdAt"`
 	Point     *Point    `json:"point"`
-	SolvedBy  []string  `json:"solvedBy"`
 }
 type Member struct {
 	UID         string     `json:"uid"`
@@ -75,6 +80,7 @@ type Member struct {
 	Callsign    string     `json:"callsign"`
 	DisplayName string     `json:"displayName"`
 	Role        string     `json:"role"`
+	Weapon      string     `json:"weapon"`
 	Map         string     `json:"map"`
 	Online      bool       `json:"online"`
 	OfflineAt   *time.Time `json:"offlineAt,omitempty"`
@@ -82,6 +88,7 @@ type Member struct {
 	Origin      *Point     `json:"origin"`
 	Target      *Point     `json:"target"`
 	Solved      bool       `json:"solved"`
+	Declined    bool       `json:"declined"`
 	Tasks       []*Task    `json:"tasks"`
 	seen        []string
 	sink        Sink
@@ -95,10 +102,14 @@ type Message struct {
 	UID       string `json:"uid,omitempty"`
 	Callsign  string `json:"callsign,omitempty"`
 	Role      string `json:"role,omitempty"`
+	Weapon    string `json:"weapon,omitempty"`
 	Map       string `json:"map,omitempty"`
 	TaskID    string `json:"taskId,omitempty"`
 	Point     *Point `json:"point"`
 	Solved    bool   `json:"solved,omitempty"`
+	// Declined lets a gunner state it cannot reach the target. Relayed as-is;
+	// no server-side meaning.
+	Declined bool `json:"declined,omitempty"`
 }
 type Event struct {
 	V          int        `json:"v"`

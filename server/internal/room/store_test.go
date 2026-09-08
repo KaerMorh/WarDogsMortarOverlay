@@ -21,7 +21,7 @@ func (c *capture) Stop() { c.stopped = true }
 func join(t *testing.T, s *Store, uid, name string) (Lease, *capture) {
 	t.Helper()
 	c := &capture{}
-	l, err := s.Join(Message{V: Protocol, Type: "join", UID: uid, Room: "aabb", Callsign: name, Role: "gunner", Map: "bakurani"}, c)
+	l, err := s.Join(Message{V: Protocol, Type: "join", UID: uid, Room: "aabb", Callsign: name, Role: "gunner", Weapon: "mortar", Map: "bakurani"}, c)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +77,10 @@ func TestLifecycleAndReplacement(t *testing.T) {
 		t.Fatal("offline expiry", n)
 	}
 }
-func TestTasksAndSolved(t *testing.T) {
+
+// The server no longer attributes solves. It must relay the claim verbatim and
+// keep publication records untouched; clients derive attribution themselves.
+func TestTasksAndSolveRelay(t *testing.T) {
 	s := New(Config{})
 	a, _ := join(t, s, NewID(), "Scout")
 	b, _ := join(t, s, NewID(), "Gun")
@@ -89,21 +92,25 @@ func TestTasksAndSolved(t *testing.T) {
 	if len(m.Tasks) != 1 {
 		t.Fatal("not idempotent")
 	}
-	apply(t, s, b, Message{Type: "target", Point: &Point{Map: "ozeti", X: 80, Y: 70}, Solved: true})
-	if len(m.Tasks[0].SolvedBy) != 0 {
-		t.Fatal("cross-map solve")
-	}
-	apply(t, s, b, Message{Type: "target", Point: p, Solved: false})
-	if len(m.Tasks[0].SolvedBy) != 0 {
-		t.Fatal("invalid solve marked")
-	}
+	_, gun := s.current(b)
 	apply(t, s, b, Message{Type: "target", Point: p, Solved: true})
-	if len(m.Tasks[0].SolvedBy) != 1 || m.Tasks[0].SolvedBy[0] != b.UID {
-		t.Fatal("solver missing")
+	if !gun.Solved || !Same(gun.Target, p) {
+		t.Fatal("solve claim not relayed")
+	}
+	apply(t, s, b, Message{Type: "target", Point: p, Declined: true})
+	if gun.Solved || !gun.Declined {
+		t.Fatal("declined claim not relayed")
 	}
 	apply(t, s, b, Message{Type: "target", Point: nil})
-	if len(m.Tasks[0].SolvedBy) != 1 {
-		t.Fatal("past solver lost")
+	if gun.Solved || gun.Declined || gun.Target != nil {
+		t.Fatal("clearing the target left a stale claim")
+	}
+	if err := s.Apply(b, Message{V: Protocol, Type: "target", Point: p, Solved: true, Declined: true}); err != ErrInvalid {
+		t.Fatal("contradictory claim accepted", err)
+	}
+	apply(t, s, a, Message{Type: "profile", Callsign: "Scout", Role: "scout", Weapon: "mortar", Map: "bakurani"})
+	if err := s.Apply(a, Message{V: Protocol, Type: "target", Point: p, Solved: true}); err != ErrInvalid {
+		t.Fatal("scout solve accepted", err)
 	}
 	for i := 0; i < 4; i++ {
 		apply(t, s, a, Message{Type: "publish", TaskID: NewID(), Point: p})
@@ -137,22 +144,27 @@ func TestEmptyRoomAndValidation(t *testing.T) {
 	}
 }
 
-func TestIdentityUpdatesSyncAndSolverBound(t *testing.T) {
-	s := New(Config{MaxMembers: MaxSolverRefs + 2})
+func TestIdentityUpdatesAndSync(t *testing.T) {
+	s := New(Config{MaxMembers: 34})
 	now := time.Date(2026, 9, 8, 0, 0, 0, 0, time.UTC)
 	s.now = func() time.Time { return now }
 	owner, ownerSink := join(t, s, NewID(), "Scout")
 	point := &Point{Map: "bakurani", X: 80, Y: 70}
 	apply(t, s, owner, Message{Type: "publish", TaskID: NewID(), Point: point})
-	for i := 0; i < MaxSolverRefs+1; i++ {
+	// Many gunners claiming the same point cost the task record nothing now.
+	for i := 0; i < 33; i++ {
 		solver, _ := join(t, s, NewID(), "Gun"+strconv.Itoa(i))
 		apply(t, s, solver, Message{Type: "target", Point: point, Solved: true})
 	}
 	_, member := s.current(owner)
-	if len(member.Tasks[0].SolvedBy) != MaxSolverRefs { t.Fatal("solver references are unbounded", len(member.Tasks[0].SolvedBy)) }
+	if len(member.Tasks) != 1 {
+		t.Fatal("publication record altered by solves", len(member.Tasks))
+	}
 
-	apply(t, s, owner, Message{Type: "profile", Callsign: "Scout New", Role: "gunner", Map: "bakurani"})
-	if s.rooms[owner.Room].Identities[owner.UID] != "Scout New" { t.Fatal("latest identity not stored") }
+	apply(t, s, owner, Message{Type: "profile", Callsign: "Scout New", Role: "gunner", Weapon: "mortar", Map: "bakurani"})
+	if s.rooms[owner.Room].Identities[owner.UID] != "Scout New" {
+		t.Fatal("latest identity not stored")
+	}
 	before := len(ownerSink.events)
 	apply(t, s, owner, Message{Type: "sync", RequestID: "sync-1"})
 	if len(ownerSink.events) < before+2 || ownerSink.events[before].Type != "snapshot" || ownerSink.events[before].SessionID != owner.SessionID {
@@ -162,5 +174,7 @@ func TestIdentityUpdatesSyncAndSolverBound(t *testing.T) {
 		t.Fatal("sync rate limit missing", err)
 	}
 	now = now.Add(2 * time.Second)
-	if err := s.Apply(owner, Message{V: Protocol, Type: "sync", RequestID: "sync-3"}); err != nil { t.Fatal(err) }
+	if err := s.Apply(owner, Message{V: Protocol, Type: "sync", RequestID: "sync-3"}); err != nil {
+		t.Fatal(err)
+	}
 }

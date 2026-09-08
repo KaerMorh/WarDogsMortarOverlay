@@ -25,7 +25,7 @@ func connect(ctx context.Context, url, roomCode, uid, name, role string) (*clien
 		return nil, err
 	}
 	c := &client{conn: conn, events: make(chan room.Event, 128), members: make(map[string]*room.Member)}
-	if err = c.send(ctx, room.Message{Type: "join", UID: uid, Room: roomCode, Callsign: name, Role: role, Map: "bakurani"}); err != nil {
+	if err = c.send(ctx, room.Message{Type: "join", UID: uid, Room: roomCode, Callsign: name, Role: role, Weapon: "mortar", Map: "bakurani"}); err != nil {
 		return nil, err
 	}
 	go func() {
@@ -127,9 +127,13 @@ func protocolSmoke(ctx context.Context, url string) {
 	_, err = b.wait(ctx, func(room.Event) bool { return hasTask(b.members[uidA], taskID, "") })
 	check(err, "public task broadcast")
 	check(b.send(ctx, room.Message{Type: "target", Point: point, Solved: true}), "solved write")
-	_, err = a.wait(ctx, func(room.Event) bool { return hasTask(a.members[uidA], taskID, uidB) })
-	check(err, "UID solver attribution")
-	check(a.send(ctx, room.Message{Type: "profile", Callsign: "Renamed", Role: "gunner", Map: "bakurani"}), "profile write")
+	// Attribution is a client concern now: the server only has to relay the
+	// solving gunner's target and solved flag.
+	_, err = a.wait(ctx, func(room.Event) bool { return solving(a.members[uidB], point) })
+	check(err, "solve claim relayed to peers")
+	check(a.send(ctx, room.Message{Type: "profile", Callsign: "Renamed", Role: "gunner", Weapon: "spg", Map: "bakurani"}), "profile write")
+	_, err = b.wait(ctx, func(room.Event) bool { return b.members[uidA] != nil && b.members[uidA].Weapon == "spg" })
+	check(err, "weapon change relayed")
 	_, err = b.wait(ctx, func(e room.Event) bool {
 		return e.Type == "identity" && e.Identity != nil && e.Identity.UID == uidA && e.Identity.Name == "Renamed"
 	})
@@ -171,28 +175,26 @@ func botSmoke(ctx context.Context, url string) {
 		return m != nil && room.Same(m.Origin, &room.Point{Map: "bakurani", X: 82, Y: 72})
 	})
 	check(err, "gunner bot plus-two origin")
-	_, err = gunner.wait(ctx, func(room.Event) bool { return hasTask(gunner.members[scoutUID], taskID, testbots.GunnerUID) })
+	_ = taskID
+	_, err = gunner.wait(ctx, func(room.Event) bool { return solving(gunner.members[testbots.GunnerUID], beacon) })
 	check(err, "gunner bot simulated solved")
 }
 
-func hasTask(member *room.Member, taskID, solver string) bool {
+func hasTask(member *room.Member, taskID, _ string) bool {
 	if member == nil {
 		return false
 	}
 	for _, task := range member.Tasks {
-		if task.ID != taskID {
-			continue
-		}
-		if solver == "" {
+		if task.ID == taskID {
 			return true
-		}
-		for _, uid := range task.SolvedBy {
-			if uid == solver {
-				return true
-			}
 		}
 	}
 	return false
+}
+
+// solving reports the relayed claim a client would use to attribute a solve.
+func solving(member *room.Member, point *room.Point) bool {
+	return member != nil && member.Solved && room.Same(member.Target, point)
 }
 func hasPointTask(member *room.Member, point *room.Point) bool {
 	if member == nil {

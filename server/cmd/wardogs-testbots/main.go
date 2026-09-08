@@ -59,7 +59,7 @@ func (b *botClient) run(ctx context.Context) {
 	for ctx.Err() == nil {
 		conn, _, err := websocket.Dial(ctx, b.url, nil)
 		if err == nil {
-			join := room.Message{V: room.Protocol, Type: "join", UID: b.uid, Room: b.roomCode, Callsign: b.name, Role: b.role, Map: "bakurani"}
+			join := room.Message{V: room.Protocol, Type: "join", UID: b.uid, Room: b.roomCode, Callsign: b.name, Role: b.role, Weapon: "mortar", Map: "bakurani"}
 			data, _ := json.Marshal(join)
 			writeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 			err = conn.Write(writeCtx, websocket.MessageText, data)

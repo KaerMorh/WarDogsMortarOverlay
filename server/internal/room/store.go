@@ -42,7 +42,7 @@ func (s *Store) Join(msg Message, sink Sink) (Lease, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	msg.Room = strings.ToLower(strings.TrimSpace(msg.Room))
-	if msg.V != Protocol || msg.Type != "join" || !roomPattern.MatchString(msg.Room) || !uuidPattern.MatchString(msg.UID) || !ValidName(msg.Callsign) || !validRole(msg.Role) || !validMap(msg.Map) {
+	if msg.V != Protocol || msg.Type != "join" || !roomPattern.MatchString(msg.Room) || !uuidPattern.MatchString(msg.UID) || !ValidName(msg.Callsign) || !validRole(msg.Role) || !validWeapon(msg.Weapon) || !validMap(msg.Map) {
 		return Lease{}, ErrInvalid
 	}
 	s.sweepLocked()
@@ -63,7 +63,7 @@ func (s *Store) Join(msg Message, sink Sink) (Lease, error) {
 		old.sink.Stop()
 	}
 	r.Sequence++
-	m := &Member{UID: msg.UID, SessionID: NewID(), Callsign: msg.Callsign, DisplayName: msg.Callsign, Role: msg.Role, Map: msg.Map, Online: true, Joined: r.Sequence, Tasks: []*Task{}, sink: sink}
+	m := &Member{UID: msg.UID, SessionID: NewID(), Callsign: msg.Callsign, DisplayName: msg.Callsign, Role: msg.Role, Weapon: msg.Weapon, Map: msg.Map, Online: true, Joined: r.Sequence, Tasks: []*Task{}, sink: sink}
 	r.Members[m.UID] = m
 	renamed := s.names(r)
 	r.Revision++
@@ -164,14 +164,15 @@ func (s *Store) Apply(l Lease, msg Message) error {
 	}
 	switch msg.Type {
 	case "profile":
-		if !ValidName(msg.Callsign) || !validRole(msg.Role) || !validMap(msg.Map) {
+		if !ValidName(msg.Callsign) || !validRole(msg.Role) || !validWeapon(msg.Weapon) || !validMap(msg.Map) {
 			return ErrInvalid
 		}
-		if m.Callsign == msg.Callsign && m.Role == msg.Role && m.Map == msg.Map {
+		if m.Callsign == msg.Callsign && m.Role == msg.Role && m.Weapon == msg.Weapon && m.Map == msg.Map {
 			break
 		}
 		m.Callsign = msg.Callsign
 		m.Role = msg.Role
+		m.Weapon = msg.Weapon
 		m.Map = msg.Map
 		renamed := s.names(r)
 		s.emit(r, Event{Type: "member", Member: m})
@@ -197,27 +198,16 @@ func (s *Store) Apply(l Lease, msg Message) error {
 		m.Origin = msg.Point
 		s.emit(r, Event{Type: "member", Member: m})
 	case "target":
-		if msg.Point != nil && !msg.Point.Valid() || msg.Solved && (msg.Point == nil || m.Role != "gunner") {
+		gunnerClaim := msg.Solved || msg.Declined
+		if msg.Point != nil && !msg.Point.Valid() || gunnerClaim && (msg.Point == nil || m.Role != "gunner") || msg.Solved && msg.Declined {
 			return ErrInvalid
 		}
-		if Equal(m.Target, msg.Point) && m.Solved == msg.Solved {
+		if Equal(m.Target, msg.Point) && m.Solved == msg.Solved && m.Declined == msg.Declined {
 			break
 		}
 		m.Target = msg.Point
 		m.Solved = msg.Solved
-		if msg.Solved {
-			for _, owner := range ordered(r) {
-				changed := false
-				for _, task := range owner.Tasks {
-					if Same(task.Point, msg.Point) && remember(task, m) {
-						changed = true
-					}
-				}
-				if changed && owner != m {
-					s.emit(r, Event{Type: "member", Member: owner})
-				}
-			}
-		}
+		m.Declined = msg.Declined
 		s.emit(r, Event{Type: "member", Member: m})
 	case "publish":
 		if !uuidPattern.MatchString(msg.TaskID) || !msg.Point.Valid() {
@@ -230,12 +220,7 @@ func (s *Store) Apply(l Lease, msg Message) error {
 			}
 		}
 		r.Sequence++
-		task := &Task{ID: msg.TaskID, Sequence: r.Sequence, CreatedAt: s.now().UTC(), Point: msg.Point, SolvedBy: []string{}}
-		for _, gunner := range ordered(r) {
-			if gunner.Role == "gunner" && gunner.Online && gunner.Solved && Same(gunner.Target, task.Point) {
-				remember(task, gunner)
-			}
-		}
+		task := &Task{ID: msg.TaskID, Sequence: r.Sequence, CreatedAt: s.now().UTC(), Point: msg.Point}
 		m.Tasks = append([]*Task{task}, m.Tasks...)
 		if len(m.Tasks) > 3 {
 			m.Tasks = m.Tasks[:3]
@@ -250,18 +235,6 @@ func (s *Store) Apply(l Lease, msg Message) error {
 	}
 	send(m.sink, Event{V: Protocol, Type: "ack", RoomID: r.ID, RequestID: msg.RequestID})
 	return nil
-}
-func remember(task *Task, m *Member) bool {
-	for _, uid := range task.SolvedBy {
-		if uid == m.UID {
-			return false
-		}
-	}
-	if len(task.SolvedBy) >= MaxSolverRefs {
-		return false
-	}
-	task.SolvedBy = append(task.SolvedBy, m.UID)
-	return true
 }
 func (s *Store) Leave(l Lease) {
 	s.mu.Lock()
@@ -298,15 +271,14 @@ func (s *Store) sweepLocked() {
 		}
 	}
 }
+
+// Identities are kept only for current members. Clients snapshot the solver
+// name into their local ledger when they observe a solve, so a departed
+// gunner's name survives there rather than here.
 func (s *Store) pruneIdentities(r *State) {
 	keep := map[string]bool{}
-	for uid, m := range r.Members {
+	for uid := range r.Members {
 		keep[uid] = true
-		for _, task := range m.Tasks {
-			for _, solver := range task.SolvedBy {
-				keep[solver] = true
-			}
-		}
 	}
 	for uid := range r.Identities {
 		if !keep[uid] {

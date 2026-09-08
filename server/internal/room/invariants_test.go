@@ -11,7 +11,7 @@ func TestRoomIsolationAndNoopUpdates(t *testing.T) {
 	s := New(Config{})
 	a, _ := join(t, s, NewID(), "A")
 	b := &capture{}
-	_, err := s.Join(Message{V: Protocol, Type: "join", UID: NewID(), Room: "bbbb", Callsign: "B", Role: "gunner", Map: "ozeti"}, b)
+	_, err := s.Join(Message{V: Protocol, Type: "join", UID: NewID(), Room: "bbbb", Callsign: "B", Role: "gunner", Weapon: "mortar", Map: "ozeti"}, b)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -22,7 +22,7 @@ func TestRoomIsolationAndNoopUpdates(t *testing.T) {
 	}
 	r, _ := s.current(a)
 	revision := r.Revision
-	apply(t, s, a, Message{Type: "profile", Callsign: "A", Role: "gunner", Map: "bakurani"})
+	apply(t, s, a, Message{Type: "profile", Callsign: "A", Role: "gunner", Weapon: "mortar", Map: "bakurani"})
 	apply(t, s, a, Message{Type: "target"})
 	apply(t, s, a, Message{Type: "origin"})
 	if r.Revision != revision {
@@ -34,7 +34,7 @@ func TestCapacityAndTTLBoundary(t *testing.T) {
 	now := time.Now()
 	s.now = func() time.Time { return now }
 	a, _ := join(t, s, NewID(), "A")
-	request := Message{V: Protocol, Type: "join", UID: NewID(), Room: "aabb", Callsign: "B", Role: "gunner", Map: "bakurani"}
+	request := Message{V: Protocol, Type: "join", UID: NewID(), Room: "aabb", Callsign: "B", Role: "gunner", Weapon: "mortar", Map: "bakurani"}
 	if _, err := s.Join(request, &capture{}); err == nil || err.Error() != "room_full" {
 		t.Fatal(err)
 	}
@@ -65,7 +65,7 @@ func TestConcurrentRoomsAndCleanup(t *testing.T) {
 		workers.Add(1)
 		go func() {
 			defer workers.Done()
-			l, err := s.Join(Message{V: Protocol, Type: "join", UID: NewID(), Room: NewID()[:8], Callsign: "Parallel", Role: "gunner", Map: "bakurani"}, discardSink{})
+			l, err := s.Join(Message{V: Protocol, Type: "join", UID: NewID(), Room: NewID()[:8], Callsign: "Parallel", Role: "gunner", Weapon: "mortar", Map: "bakurani"}, discardSink{})
 			if err != nil {
 				t.Error(err)
 				return
@@ -88,7 +88,7 @@ func TestEncodedBroadcastIsImmutable(t *testing.T) {
 	s := New(Config{})
 	a, c := join(t, s, NewID(), "A")
 	first := c.events[0]
-	apply(t, s, a, Message{Type: "profile", Callsign: "Changed", Role: "scout", Map: "ozeti"})
+	apply(t, s, a, Message{Type: "profile", Callsign: "Changed", Role: "scout", Weapon: "mortar", Map: "ozeti"})
 	if first.Members[0].Callsign != "A" {
 		t.Fatal("prior snapshot mutated")
 	}

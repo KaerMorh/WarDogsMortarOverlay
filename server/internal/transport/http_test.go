@@ -27,7 +27,7 @@ func TestWebSocketRoundTrip(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	send(room.Message{V: room.Protocol, Type: "join", Room: "test", UID: room.NewID(), Callsign: "A", Role: "gunner", Map: "bakurani"})
+	send(room.Message{V: room.Protocol, Type: "join", Room: "test", UID: room.NewID(), Callsign: "A", Role: "gunner", Weapon: "mortar", Map: "bakurani"})
 	_, data, err := conn.Read(ctx)
 	if err != nil {
 		t.Fatal(err)
