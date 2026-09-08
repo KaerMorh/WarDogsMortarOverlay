@@ -37,7 +37,7 @@ overlay.example.com {
 }
 ```
 
-客户端填写 wss://overlay.example.com/ws。证书由反向代理管理，服务没有出站 HTTPS 依赖。需要开放 443；Caddy 自动签证还可能需要 80。服务器地址和域名尚未提供，当前不执行公网部署。
+客户端填写 wss://overlay.example.com/ws。证书由反向代理管理，服务没有出站 HTTPS 依赖。需要开放 443；Caddy 自动签证还可能需要 80。当前用户服务器已采用下面的 systemd + 既有 OpenResty 方案；Caddy Compose 仍作为没有现有反向代理时的可选方案。
 
 没有现有反向代理时，可使用附带的 Caddy Compose 扩展（域名先解析到本机，开放 80/443）：
 
@@ -67,3 +67,26 @@ docker compose -f compose.yaml -f compose.public.yaml up -d --build
 `go test ./...` 包含配置、房间生命周期、并发入房发布、消息隔离、重复消息、时间边界、限流、超大消息、无心跳连接、排队预算、停机资源回收等测试。当前环境未运行 Linux 容器或 Go race detector，详见开发进度。
 
 房间和 UID 仅用于同伴协作，不是账号认证。知道房间码即可加入，同 UID 会替换旧会话；不要公开发布实际房间码或身份文件。重启服务器清空房间，不删除客户端本次历史。
+
+## 当前服务器部署
+
+2026-09-08 已部署到 `/opt/wardogs`：
+
+- 程序：`/opt/wardogs/bin/wardogs-server`
+- 配置：`/opt/wardogs/wardogs.env`
+- systemd：`wardogs.service`
+- 公网 WebSocket：`wss://wardogs.kaermorh.cloud/ws`
+- 健康检查：`https://wardogs.kaermorh.cloud/healthz`、`https://wardogs.kaermorh.cloud/readyz`
+
+服务只监听 `127.0.0.1:8080`，由服务器已有的 1Panel OpenResty 代理 80/443。部署源文件在 `server/deploy/`。证书由 Certbot 定时续期，部署钩子 `/opt/wardogs/deploy/deploy-certificate.sh` 将新证书复制到 OpenResty 挂载目录并在配置检查通过后重载。
+
+常用只读检查：
+
+```sh
+systemctl status wardogs.service
+journalctl -u wardogs.service -n 100 --no-pager
+curl --fail https://wardogs.kaermorh.cloud/readyz
+docker exec 1Panel-openresty-X6Z2 openresty -t
+```
+
+更新线上文件或安装依赖前必须按项目服务器规则检查磁盘；任一相关持久化文件系统使用率超过 95% 时立即停止。未来更新仍需用户明确授权，不自动部署。
