@@ -69,7 +69,7 @@ func main() {
 		_ = api.Close(deadline)
 		_ = server.Shutdown(deadline)
 	}()
-	log.Printf("WarDogs protocol=1 listen=%s max_rooms=%d max_members=%d max_connections=%d", cfg.Address, cfg.MaxRooms, cfg.MaxMembers, cfg.MaxConnections)
+	log.Printf("WarDogs protocol=%d listen=%s max_rooms=%d max_members=%d max_connections=%d", room.Protocol, cfg.Address, cfg.MaxRooms, cfg.MaxMembers, cfg.MaxConnections)
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatal(err)
 	}

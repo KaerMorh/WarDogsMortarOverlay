@@ -64,7 +64,7 @@ func readType(t *testing.T, conn *websocket.Conn, kind string) room.Event {
 	}
 }
 func joinClient(t *testing.T, conn *websocket.Conn) {
-	write(t, conn, room.Message{V: 1, Type: "join", UID: room.NewID(), Room: "test", Callsign: "A", Role: "gunner", Map: "bakurani"})
+	write(t, conn, room.Message{V: room.Protocol, Type: "join", UID: room.NewID(), Room: "test", Callsign: "A", Role: "gunner", Map: "bakurani"})
 	readType(t, conn, "snapshot")
 }
 func eventually(t *testing.T, predicate func() bool) {
@@ -94,7 +94,7 @@ func TestJoinTimeoutReleasesConnectionSlot(t *testing.T) {
 func TestInvalidJoinDoesNotCreateRoom(t *testing.T) {
 	api, url := testServer(t, Options{})
 	conn := dial(t, url)
-	write(t, conn, room.Message{V: 2, Type: "join", UID: room.NewID(), Room: "test", Callsign: "A", Role: "gunner", Map: "bakurani"})
+	write(t, conn, room.Message{V: room.Protocol - 1, Type: "join", UID: room.NewID(), Room: "test", Callsign: "A", Role: "gunner", Map: "bakurani"})
 	e := readType(t, conn, "error")
 	if e.Code != "invalid_message" {
 		t.Fatal(e)
@@ -108,12 +108,12 @@ func TestInvalidPointRejectedWithoutMutatingMember(t *testing.T) {
 	_, url := testServer(t, Options{})
 	conn := dial(t, url)
 	joinClient(t, conn)
-	write(t, conn, room.Message{V: 1, Type: "target", RequestID: "invalid", Point: &room.Point{Map: "other", X: 80, Y: 70}})
+	write(t, conn, room.Message{V: room.Protocol, Type: "target", RequestID: "invalid", Point: &room.Point{Map: "other", X: 80, Y: 70}})
 	e := readType(t, conn, "error")
 	if e.Code != "invalid_message" || e.RequestID != "invalid" {
 		t.Fatal(e)
 	}
-	write(t, conn, room.Message{V: 1, Type: "origin", RequestID: "valid", Point: &room.Point{Map: "bakurani", X: 80, Y: 70}})
+	write(t, conn, room.Message{V: room.Protocol, Type: "origin", RequestID: "valid", Point: &room.Point{Map: "bakurani", X: 80, Y: 70}})
 	e = readType(t, conn, "ack")
 	if e.RequestID != "valid" {
 		t.Fatal("connection unusable after recoverable rejection", e)
@@ -153,11 +153,31 @@ func TestConnectionCapacity(t *testing.T) {
 	}
 }
 
+func TestJoinRateLimitSpansConnections(t *testing.T) {
+	api, url := testServer(t, Options{JoinRatePerSecond: .001, JoinBurst: 2})
+	for i := 0; i < 2; i++ {
+		conn := dial(t, url)
+		_ = conn.CloseNow()
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	conn, response, err := websocket.Dial(ctx, url, nil)
+	if conn != nil {
+		_ = conn.CloseNow()
+	}
+	if err == nil || response == nil || response.StatusCode != http.StatusTooManyRequests {
+		t.Fatal("cross-connection join limiter ignored", err)
+	}
+	if api.Stats().Rejected == 0 {
+		t.Fatal("join rate rejection not counted")
+	}
+}
+
 func TestRateLimitClosesFloodingConnection(t *testing.T) {
 	api, url := testServer(t, Options{RatePerSecond: .01, Burst: 1})
 	conn := dial(t, url)
 	joinClient(t, conn)
-	message := room.Message{V: 1, Type: "origin", Point: &room.Point{Map: "bakurani", X: 80, Y: 70}}
+	message := room.Message{V: room.Protocol, Type: "origin", Point: &room.Point{Map: "bakurani", X: 80, Y: 70}}
 	write(t, conn, message)
 	readType(t, conn, "ack")
 	write(t, conn, message)
@@ -177,7 +197,7 @@ func TestRateLimitClosesFloodingConnection(t *testing.T) {
 func TestHeartbeatDropsNonReadingClient(t *testing.T) {
 	api, url := testServer(t, Options{HeartbeatInterval: 20 * time.Millisecond, HeartbeatTimeout: 30 * time.Millisecond})
 	conn := dial(t, url)
-	write(t, conn, room.Message{V: 1, Type: "join", UID: room.NewID(), Room: "test", Callsign: "A", Role: "gunner", Map: "bakurani"})
+	write(t, conn, room.Message{V: room.Protocol, Type: "join", UID: room.NewID(), Room: "test", Callsign: "A", Role: "gunner", Map: "bakurani"})
 	eventually(t, func() bool { return api.Stats().Rooms == 1 })
 	eventually(t, func() bool { return api.Stats().Connections == 0 })
 }

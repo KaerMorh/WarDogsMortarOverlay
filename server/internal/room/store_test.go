@@ -2,6 +2,7 @@ package room
 
 import (
 	"encoding/json"
+	"strconv"
 	"testing"
 	"time"
 )
@@ -20,7 +21,7 @@ func (c *capture) Stop() { c.stopped = true }
 func join(t *testing.T, s *Store, uid, name string) (Lease, *capture) {
 	t.Helper()
 	c := &capture{}
-	l, err := s.Join(Message{V: 1, Type: "join", UID: uid, Room: "aabb", Callsign: name, Role: "gunner", Map: "bakurani"}, c)
+	l, err := s.Join(Message{V: Protocol, Type: "join", UID: uid, Room: "aabb", Callsign: name, Role: "gunner", Map: "bakurani"}, c)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -28,7 +29,7 @@ func join(t *testing.T, s *Store, uid, name string) (Lease, *capture) {
 }
 func apply(t *testing.T, s *Store, l Lease, m Message) {
 	t.Helper()
-	m.V = 1
+	m.V = Protocol
 	if err := s.Apply(l, m); err != nil {
 		t.Fatal(err)
 	}
@@ -65,7 +66,7 @@ func TestLifecycleAndReplacement(t *testing.T) {
 		t.Fatal("reused session")
 	}
 	_ = old
-	if err := s.Apply(a, Message{V: 1, Type: "target"}); err != ErrReplaced {
+	if err := s.Apply(a, Message{V: Protocol, Type: "target"}); err != ErrReplaced {
 		t.Fatal("stale write accepted", err)
 	}
 	s.Leave(latest)
@@ -97,7 +98,7 @@ func TestTasksAndSolved(t *testing.T) {
 		t.Fatal("invalid solve marked")
 	}
 	apply(t, s, b, Message{Type: "target", Point: p, Solved: true})
-	if len(m.Tasks[0].SolvedBy) != 1 || m.Tasks[0].SolvedBy[0].UID != b.UID {
+	if len(m.Tasks[0].SolvedBy) != 1 || m.Tasks[0].SolvedBy[0] != b.UID {
 		t.Fatal("solver missing")
 	}
 	apply(t, s, b, Message{Type: "target", Point: nil})
@@ -131,7 +132,35 @@ func TestEmptyRoomAndValidation(t *testing.T) {
 	if c.events[0].RoomID == first || len(c.events[0].Members) != 1 {
 		t.Fatal("room not fresh")
 	}
-	if _, err := s.Join(Message{V: 2, Type: "join"}, &capture{}); err == nil {
+	if _, err := s.Join(Message{V: Protocol - 1, Type: "join"}, &capture{}); err == nil {
 		t.Fatal("version accepted")
 	}
+}
+
+func TestIdentityUpdatesSyncAndSolverBound(t *testing.T) {
+	s := New(Config{MaxMembers: MaxSolverRefs + 2})
+	now := time.Date(2026, 9, 8, 0, 0, 0, 0, time.UTC)
+	s.now = func() time.Time { return now }
+	owner, ownerSink := join(t, s, NewID(), "Scout")
+	point := &Point{Map: "bakurani", X: 80, Y: 70}
+	apply(t, s, owner, Message{Type: "publish", TaskID: NewID(), Point: point})
+	for i := 0; i < MaxSolverRefs+1; i++ {
+		solver, _ := join(t, s, NewID(), "Gun"+strconv.Itoa(i))
+		apply(t, s, solver, Message{Type: "target", Point: point, Solved: true})
+	}
+	_, member := s.current(owner)
+	if len(member.Tasks[0].SolvedBy) != MaxSolverRefs { t.Fatal("solver references are unbounded", len(member.Tasks[0].SolvedBy)) }
+
+	apply(t, s, owner, Message{Type: "profile", Callsign: "Scout New", Role: "gunner", Map: "bakurani"})
+	if s.rooms[owner.Room].Identities[owner.UID] != "Scout New" { t.Fatal("latest identity not stored") }
+	before := len(ownerSink.events)
+	apply(t, s, owner, Message{Type: "sync", RequestID: "sync-1"})
+	if len(ownerSink.events) < before+2 || ownerSink.events[before].Type != "snapshot" || ownerSink.events[before].SessionID != owner.SessionID {
+		t.Fatal("sync did not return same-session snapshot")
+	}
+	if err := s.Apply(owner, Message{V: Protocol, Type: "sync", RequestID: "sync-2"}); err == nil || err.Error() != "sync_rate_limited" {
+		t.Fatal("sync rate limit missing", err)
+	}
+	now = now.Add(2 * time.Second)
+	if err := s.Apply(owner, Message{V: Protocol, Type: "sync", RequestID: "sync-3"}); err != nil { t.Fatal(err) }
 }

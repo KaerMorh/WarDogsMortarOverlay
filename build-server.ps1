@@ -20,13 +20,18 @@ try {
         if ($Linux) {
             $env:GOOS='linux'
             $target=Join-Path $projectRoot 'artifacts/multiplayer/linux/wardogs-server'
+            $botTarget=Join-Path $projectRoot 'artifacts/multiplayer/linux/wardogs-testbots'
         } else {
             $env:GOOS='windows'
             $target=Join-Path $projectRoot 'artifacts/multiplayer/wardogs-server.exe'
+            $botTarget=Join-Path $projectRoot 'artifacts/multiplayer/wardogs-testbots.exe'
         }
         & $go build -trimpath '-ldflags=-s -w' -o $target ./cmd/wardogs-server
         if ($LASTEXITCODE -ne 0) { throw 'Go server build failed' }
+        & $go build -trimpath '-ldflags=-s -w' -o $botTarget ./cmd/wardogs-testbots
+        if ($LASTEXITCODE -ne 0) { throw 'Go test bots build failed' }
         Get-FileHash -LiteralPath $target -Algorithm SHA256
+        Get-FileHash -LiteralPath $botTarget -Algorithm SHA256
     } finally {
         $env:GOOS=$previousGoOs
         $env:GOARCH=$previousGoArch

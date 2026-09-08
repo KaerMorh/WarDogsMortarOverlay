@@ -13,7 +13,8 @@ import (
 	"unicode/utf8"
 )
 
-const Protocol = 1
+const Protocol = 2
+const MaxSolverRefs = 32
 
 type Point struct {
 	Map string  `json:"map"`
@@ -57,7 +58,7 @@ func ValidName(s string) bool {
 	return true
 }
 
-type Actor struct {
+type Identity struct {
 	UID  string `json:"uid"`
 	Name string `json:"name"`
 }
@@ -66,7 +67,7 @@ type Task struct {
 	Sequence  int64     `json:"sequence"`
 	CreatedAt time.Time `json:"createdAt"`
 	Point     *Point    `json:"point"`
-	SolvedBy  []Actor   `json:"solvedBy"`
+	SolvedBy  []string  `json:"solvedBy"`
 }
 type Member struct {
 	UID         string     `json:"uid"`
@@ -84,6 +85,7 @@ type Member struct {
 	Tasks       []*Task    `json:"tasks"`
 	seen        []string
 	sink        Sink
+	lastSync    time.Time
 }
 type Message struct {
 	V         int    `json:"v"`
@@ -99,18 +101,20 @@ type Message struct {
 	Solved    bool   `json:"solved,omitempty"`
 }
 type Event struct {
-	V         int       `json:"v"`
-	Type      string    `json:"type"`
-	RoomID    string    `json:"roomId,omitempty"`
-	Room      string    `json:"room,omitempty"`
-	Map       string    `json:"map,omitempty"`
-	Revision  int64     `json:"revision,omitempty"`
-	SessionID string    `json:"sessionId,omitempty"`
-	RequestID string    `json:"requestId,omitempty"`
-	Members   []*Member `json:"members,omitempty"`
-	Member    *Member   `json:"member,omitempty"`
-	UID       string    `json:"uid,omitempty"`
-	Code      string    `json:"code,omitempty"`
+	V          int        `json:"v"`
+	Type       string     `json:"type"`
+	RoomID     string     `json:"roomId,omitempty"`
+	Room       string     `json:"room,omitempty"`
+	Map        string     `json:"map,omitempty"`
+	Revision   int64      `json:"revision,omitempty"`
+	SessionID  string     `json:"sessionId,omitempty"`
+	RequestID  string     `json:"requestId,omitempty"`
+	Members    []*Member  `json:"members,omitempty"`
+	Identities []Identity `json:"identities,omitempty"`
+	Member     *Member    `json:"member,omitempty"`
+	Identity   *Identity  `json:"identity,omitempty"`
+	UID        string     `json:"uid,omitempty"`
+	Code       string     `json:"code,omitempty"`
 }
 
 // Send must be non-blocking. The encoded bytes are immutable and may be shared

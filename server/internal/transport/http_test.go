@@ -27,7 +27,7 @@ func TestWebSocketRoundTrip(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	send(room.Message{V: 1, Type: "join", Room: "test", UID: room.NewID(), Callsign: "A", Role: "gunner", Map: "bakurani"})
+	send(room.Message{V: room.Protocol, Type: "join", Room: "test", UID: room.NewID(), Callsign: "A", Role: "gunner", Map: "bakurani"})
 	_, data, err := conn.Read(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -37,7 +37,7 @@ func TestWebSocketRoundTrip(t *testing.T) {
 		t.Fatal(string(data))
 	}
 	id := room.NewID()
-	send(room.Message{V: 1, Type: "publish", TaskID: id, RequestID: "publish", Point: &room.Point{Map: "bakurani", X: 80, Y: 70}})
+	send(room.Message{V: room.Protocol, Type: "publish", TaskID: id, RequestID: "publish", Point: &room.Point{Map: "bakurani", X: 80, Y: 70}})
 	found := false
 	for {
 		_, data, err = conn.Read(ctx)

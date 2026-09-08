@@ -5,7 +5,7 @@ namespace WarDogs.Multiplayer;
 
 public static class Protocol
 {
-    public const int Version = 1;
+    public const int Version = 2;
     public static readonly JsonSerializerOptions Json = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, PropertyNameCaseInsensitive = true };
 }
 
@@ -17,13 +17,14 @@ public record NetworkPoint(string Map, double X, double Y)
     static double Quantize(double value) => Math.Round(value * 1e6, MidpointRounding.AwayFromZero);
 }
 public record Solver(string Uid, string Name);
+public record RoomIdentity(string Uid, string Name);
 public sealed class RoomTask
 {
     public string Id { get; set; } = "";
     public long Sequence { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public NetworkPoint Point { get; set; } = new("bakurani", 0, 0);
-    public List<Solver> SolvedBy { get; set; } = new();
+    public List<string> SolvedBy { get; set; } = new();
 }
 public sealed class RoomMember
 {
@@ -66,7 +67,9 @@ public sealed class RoomEvent
     public string SessionId { get; set; } = "";
     public string? RequestId { get; set; }
     public List<RoomMember> Members { get; set; } = new();
+    public List<RoomIdentity> Identities { get; set; } = new();
     public RoomMember? Member { get; set; }
+    public RoomIdentity? Identity { get; set; }
     public string? Uid { get; set; }
     public string? Code { get; set; }
 }

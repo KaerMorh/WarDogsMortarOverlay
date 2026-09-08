@@ -113,20 +113,20 @@ public class Controller
     void AddHistory(HistoryEntry entry){History.Insert(0,entry);while(History.Count>100)History.RemoveAt(History.Count-1);Notices.Insert(0,entry.FullText.Replace('\n',' '));if(Notices.Count>20)Notices.RemoveAt(20);}
     public void RecordRoomTask(RoomMember member,RoomTask task)
     {
-        var shared=new SharedTaskHistory{RoomId=Rooms.State.RoomId,TaskId=task.Id,PublisherUid=member.Uid,PublisherName=member.DisplayName,Sequence=task.Sequence,Point=task.Point};shared.Remember(task.SolvedBy);
+        var shared=new SharedTaskHistory{RoomId=Rooms.State.RoomId,TaskId=task.Id,PublisherUid=member.Uid,Sequence=task.Sequence,Point=task.Point};shared.Remember(task.SolvedBy,Rooms.State);
         AddHistory(new(task.CreatedAt.LocalDateTime,"",new(task.Point.Map,State.Weapon,Awaiting.Target,task.Point.Coordinate,"房间任务"),TowerProximity.Describe(task.Point.Coordinate,Towers[task.Point.Map]),shared));
     }
     public void UpdateRoomHistory()
     {
         for(var i=0;i<History.Count;i++)if(History[i].Shared is {} shared&&shared.RoomId==Rooms.State.RoomId)
         {
-            var before=shared.SolvedBy.Count;
+            var before=shared.Status;shared.UpdateNames(Rooms.State);
             foreach(var member in Rooms.State.Members.Values)
             {
-                foreach(var task in member.Tasks.Where(t=>t.Id==shared.TaskId))shared.Remember(task.SolvedBy);
-                if(member.Role=="gunner"&&member.Solved&&member.Target?.Same(shared.Point)==true)shared.Remember(new[]{new Solver(member.Uid,member.DisplayName)});
+                foreach(var task in member.Tasks.Where(t=>t.Id==shared.TaskId))shared.Remember(task.SolvedBy,Rooms.State);
+                if(member.Role=="gunner"&&member.Solved&&member.Target?.Same(shared.Point)==true)shared.Remember(new[]{member.Uid},Rooms.State);
             }
-            if(shared.SolvedBy.Count!=before)History[i]=History[i] with {};
+            if(shared.Status!=before)History[i]=History[i] with {};
         }
     }
     public void CancelInputForRoomSelection(){requestRevision++;Pending=null;dragUpdate=null;Rooms.Capture.Cancel();}

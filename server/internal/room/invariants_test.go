@@ -11,7 +11,7 @@ func TestRoomIsolationAndNoopUpdates(t *testing.T) {
 	s := New(Config{})
 	a, _ := join(t, s, NewID(), "A")
 	b := &capture{}
-	_, err := s.Join(Message{V: 1, Type: "join", UID: NewID(), Room: "bbbb", Callsign: "B", Role: "gunner", Map: "ozeti"}, b)
+	_, err := s.Join(Message{V: Protocol, Type: "join", UID: NewID(), Room: "bbbb", Callsign: "B", Role: "gunner", Map: "ozeti"}, b)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -34,7 +34,7 @@ func TestCapacityAndTTLBoundary(t *testing.T) {
 	now := time.Now()
 	s.now = func() time.Time { return now }
 	a, _ := join(t, s, NewID(), "A")
-	request := Message{V: 1, Type: "join", UID: NewID(), Room: "aabb", Callsign: "B", Role: "gunner", Map: "bakurani"}
+	request := Message{V: Protocol, Type: "join", UID: NewID(), Room: "aabb", Callsign: "B", Role: "gunner", Map: "bakurani"}
 	if _, err := s.Join(request, &capture{}); err == nil || err.Error() != "room_full" {
 		t.Fatal(err)
 	}
@@ -65,13 +65,13 @@ func TestConcurrentRoomsAndCleanup(t *testing.T) {
 		workers.Add(1)
 		go func() {
 			defer workers.Done()
-			l, err := s.Join(Message{V: 1, Type: "join", UID: NewID(), Room: NewID()[:8], Callsign: "Parallel", Role: "gunner", Map: "bakurani"}, discardSink{})
+			l, err := s.Join(Message{V: Protocol, Type: "join", UID: NewID(), Room: NewID()[:8], Callsign: "Parallel", Role: "gunner", Map: "bakurani"}, discardSink{})
 			if err != nil {
 				t.Error(err)
 				return
 			}
 			for n := 0; n < 20; n++ {
-				if err = s.Apply(l, Message{V: 1, Type: "publish", TaskID: NewID(), Point: &Point{Map: "bakurani", X: 80, Y: 70}}); err != nil {
+				if err = s.Apply(l, Message{V: Protocol, Type: "publish", TaskID: NewID(), Point: &Point{Map: "bakurani", X: 80, Y: 70}}); err != nil {
 					t.Error(err)
 				}
 			}

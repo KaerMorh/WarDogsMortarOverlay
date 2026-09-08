@@ -1,0 +1,30 @@
+[Unit]
+Description=WarDogs multiplayer test-room bots
+Wants=network-online.target
+After=network-online.target wardogs.service
+
+[Service]
+Type=simple
+User=wardogs
+Group=wardogs
+WorkingDirectory=/opt/wardogs
+Environment=WARDOGS_BOT_URL=wss://wardogs.kaermorh.cloud/ws
+Environment=WARDOGS_BOT_ROOM=testzz4z
+ExecStart=/opt/wardogs/bin/wardogs-testbots
+Restart=on-failure
+RestartSec=3s
+TimeoutStopSec=15s
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryMax=64M
+TasksMax=32
+
+[Install]
+WantedBy=multi-user.target

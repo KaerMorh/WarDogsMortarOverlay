@@ -9,6 +9,7 @@ public sealed class RoomState
     public string SessionId { get; private set; } = "";
     public long Revision { get; private set; }
     public Dictionary<string, RoomMember> Members { get; } = new();
+    public Dictionary<string, string> Identities { get; } = new();
     readonly HashSet<string> seen = new();
     readonly Queue<string> seenOrder = new();
     public event Action<RoomMember, RoomTask>? TaskReceived;
@@ -19,7 +20,10 @@ public sealed class RoomState
         {
             RoomId = e.RoomId; RoomCode = e.Room; Map = e.Map; SessionId = e.SessionId; Revision = e.Revision;
             Members.Clear();
+            Identities.Clear();
+            foreach (var entry in e.Identities) Identities[entry.Uid] = entry.Name;
             foreach (var member in e.Members) Members[member.Uid] = member;
+            foreach (var member in e.Members) Identities.TryAdd(member.Uid, member.DisplayName);
             foreach (var item in e.Members.SelectMany(m => m.Tasks.Select(t => (m, t))).OrderBy(x => x.t.Sequence)) Receive(item.m, item.t);
             return true;
         }
@@ -27,10 +31,15 @@ public sealed class RoomState
         if (e.Type == "member" && e.Member is { } updated)
         {
             Revision = e.Revision; Members[updated.Uid] = updated;
+            Identities[updated.Uid] = updated.DisplayName;
             foreach (var task in updated.Tasks.OrderBy(t => t.Sequence)) Receive(updated, task);
             return true;
         }
         if (e.Type == "removed" && e.Uid != null) { Revision = e.Revision; Members.Remove(e.Uid); return true; }
+        if (e.Type == "identity" && e.Identity is { } identity)
+        {
+            Revision = e.Revision; Identities[identity.Uid] = identity.Name; return true;
+        }
         return false;
     }
     void Receive(RoomMember member, RoomTask task)
@@ -41,7 +50,8 @@ public sealed class RoomState
         while (seenOrder.Count > 1024) seen.Remove(seenOrder.Dequeue());
         TaskReceived?.Invoke(member, task);
     }
-    public void Clear() { RoomId = RoomCode = Map = SessionId = ""; Revision = 0; Members.Clear(); }
+    public string ResolveName(string uid) => Identities.GetValueOrDefault(uid, uid.Length > 8 ? uid[..8] : uid);
+    public void Clear() { RoomId = RoomCode = Map = SessionId = ""; Revision = 0; Members.Clear(); Identities.Clear(); }
 }
 
 public sealed class PublishCapture
@@ -63,13 +73,19 @@ public sealed class SharedTaskHistory
     public string RoomId { get; init; } = "";
     public string TaskId { get; init; } = "";
     public string PublisherUid { get; init; } = "";
-    public string PublisherName { get; init; } = "";
+    public string PublisherName { get; private set; } = "";
     public long Sequence { get; init; }
     public NetworkPoint Point { get; init; } = new("bakurani", 0, 0);
     public List<Solver> SolvedBy { get; } = new();
     public string Status => SolvedBy.Count == 0 ? "尚未解算" : "已解算：" + string.Join("、", SolvedBy.Select(x => x.Name));
-    public void Remember(IEnumerable<Solver> solvers)
+    public void UpdateNames(RoomState state)
     {
-        foreach (var solver in solvers) if (!SolvedBy.Any(s => s.Uid == solver.Uid)) SolvedBy.Add(solver);
+        PublisherName = state.ResolveName(PublisherUid);
+        for (var i = 0; i < SolvedBy.Count; i++) SolvedBy[i] = new(SolvedBy[i].Uid, state.ResolveName(SolvedBy[i].Uid));
+    }
+    public void Remember(IEnumerable<string> solverUids, RoomState state)
+    {
+        foreach (var uid in solverUids) if (!SolvedBy.Any(s => s.Uid == uid)) SolvedBy.Add(new(uid, state.ResolveName(uid)));
+        UpdateNames(state);
     }
 }

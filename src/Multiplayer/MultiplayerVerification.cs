@@ -31,11 +31,11 @@ internal static class MultiplayerVerification
                 members.Add(m);
             }
             members[2].Origin = new("bakurani", 80.52, 69.85); members[2].Target = members[0].Tasks[0].Point; members[2].Solved = true;
-            members[0].Tasks[0].SolvedBy.Add(new(members[2].Uid, members[2].DisplayName));
-            c.Rooms.State.Apply(new() { V = 1, Type = "snapshot", RoomId = "preview", Room = "demo", Map = "bakurani", Revision = 1, SessionId = "preview", Members = members });
+            members[0].Tasks[0].SolvedBy.Add(members[2].Uid);
+            c.Rooms.State.Apply(new() { V = Protocol.Version, Type = "snapshot", RoomId = "preview", Room = "demo", Map = "bakurani", Revision = 1, SessionId = "preview", Members = members, Identities = members.Select(m => new RoomIdentity(m.Uid, m.DisplayName)).ToList() });
             c.UpdateRoomHistory(); c.Refresh();
             Check(c.History.Count(h => h.Shared != null) == 9, "all nine tasks recorded once");
-            c.Rooms.State.Apply(new() { V = 1, Type = "member", RoomId = "preview", Revision = 2, Member = members[0] }); c.UpdateRoomHistory();
+            c.Rooms.State.Apply(new() { V = Protocol.Version, Type = "member", RoomId = "preview", Revision = 2, Member = members[0] }); c.UpdateRoomHistory();
             Check(c.History.Count(h => h.Shared != null) == 9, "repeated member does not duplicate history");
             var before = c.State.Current.Target;
             c.Rooms.Capture.Toggle(100); var published = c.Rooms.Capture.Consume(101, new(82, 71));
@@ -56,11 +56,11 @@ internal static class MultiplayerVerification
                 picker.MoveSelection(1);var highlighted=picker.HighlightedTaskId;
                 var fresh=new RoomTask{Id=Guid.NewGuid().ToString("D"),Sequence=10,CreatedAt=DateTimeOffset.Now,Point=new("bakurani",82.2,71.1)};
                 members[0].Tasks.Insert(0,fresh);members[0].Tasks.RemoveAt(3);
-                c.Rooms.State.Apply(new(){V=1,Type="member",RoomId="preview",Revision=3,Member=members[0]});c.Refresh();await Task.Delay(250);
+                c.Rooms.State.Apply(new(){V=Protocol.Version,Type="member",RoomId="preview",Revision=3,Member=members[0]});c.Refresh();await Task.Delay(250);
                 Check(highlighted!=null&&picker.HighlightedTaskId==highlighted,"new task preserves selected task identity");
                 Save((FrameworkElement)picker.Content, Path.Combine(directory, "task-picker.png"));
                 members[0].Tasks.RemoveAll(t=>t.Id==highlighted);
-                c.Rooms.State.Apply(new(){V=1,Type="member",RoomId="preview",Revision=4,Member=members[0]});c.Refresh();await Task.Delay(250);
+                c.Rooms.State.Apply(new(){V=Protocol.Version,Type="member",RoomId="preview",Revision=4,Member=members[0]});c.Refresh();await Task.Delay(250);
                 Check(picker.HighlightedTaskId==null,"removing selected task does not select a different target");
                 picker.Close();
             }
@@ -89,10 +89,18 @@ internal static class MultiplayerVerification
             var watch = Stopwatch.StartNew(); while (!predicate()) { if (watch.Elapsed > TimeSpan.FromSeconds(12)) throw new Exception("Timeout: " + label); await Task.Delay(25); } check(true, label);
         }
         await observer.StartAsync(uri, new() { Type = "join", Uid = Guid.NewGuid().ToString("D"), Callsign = "Observer", Room = room, Role = "scout", Map = "bakurani" });
-        await c.Rooms.JoinForVerificationAsync();
+        var joinWatch=Stopwatch.StartNew();var firstJoin=c.Rooms.JoinForVerificationAsync();var duplicateJoin=c.Rooms.JoinForVerificationAsync();
+        check(ReferenceEquals(firstJoin,duplicateJoin),"duplicate join clicks share one operation");
+        await firstJoin;
+        check(joinWatch.Elapsed>=TimeSpan.FromMilliseconds(900)&&c.Rooms.JoinButtonText=="已加入","joined display waits one second");
         try
         {
             await Until(() => observer.Connected && c.Rooms.Connected && c.Rooms.State.SessionId.Length > 0, "WPF adapter joins real Go server");
+            var sessionId=c.Rooms.State.SessionId;await c.Rooms.RequestSyncAsync();
+            check(c.Rooms.State.SessionId==sessionId,"manual sync preserves active session");
+            var validRoom=pref.Room;pref.Room="bad!";var failureWatch=Stopwatch.StartNew();await c.Rooms.JoinForVerificationAsync();
+            check(failureWatch.Elapsed>=TimeSpan.FromMilliseconds(2900)&&c.Rooms.Connected,"invalid switch holds failure for three seconds without dropping current room");
+            pref.Room=validRoom;c.Rooms.PreferencesChanged();
             var uid = c.Rooms.Uid!;
             var initial = c.State.Current.Target!;
             await Until(() => observed.TryGetValue(uid, out var member) && member.Target?.Coordinate == initial && member.Solved, "automatic target and valid solution shared");
@@ -110,6 +118,9 @@ internal static class MultiplayerVerification
             await Until(() => !observed[uid].Online, "explicit leave appears offline to observer");
             await c.Rooms.JoinForVerificationAsync();
             await Until(() => observed.TryGetValue(uid, out var member) && member.Online && member.Tasks.Count == 0, "WPF rejoin replaces same UID without restoring tasks");
+            var leaving=c.Rooms.LeaveAsync();var rapidRejoin=c.Rooms.JoinForVerificationAsync();
+            await Task.WhenAll(leaving,rapidRejoin);
+            await Until(() => c.Rooms.Connected&&observed.TryGetValue(uid,out var member)&&member.Online,"rapid leave and rejoin keeps newest intent");
         }
         finally { await c.Rooms.LeaveAsync(); }
     }

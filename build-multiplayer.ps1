@@ -15,6 +15,8 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Go tests failed' }
     & $go build -trimpath -o (Join-Path $projectRoot 'artifacts/multiplayer/wardogs-server.exe') ./cmd/wardogs-server
     if ($LASTEXITCODE -ne 0) { throw 'Go build failed' }
+    & $go build -trimpath -o (Join-Path $projectRoot 'artifacts/multiplayer/wardogs-testbots.exe') ./cmd/wardogs-testbots
+    if ($LASTEXITCODE -ne 0) { throw 'Go test bots build failed' }
 } finally { Pop-Location }
 & $sdk run --project "$projectRoot/tests/CoreTests.csproj" -- "$projectRoot/src/Data/weapons.json"
 if ($LASTEXITCODE -ne 0) { throw 'Core tests failed' }

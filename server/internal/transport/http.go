@@ -3,6 +3,7 @@ package transport
 import (
 	"context"
 	"encoding/json"
+	"net"
 	"net/http"
 	"sync"
 	"sync/atomic"
@@ -20,6 +21,8 @@ type Options struct {
 	JoinTimeout, WriteTimeout, HeartbeatInterval, HeartbeatTimeout time.Duration
 	RatePerSecond                                                  float64
 	Burst                                                          int
+	JoinRatePerSecond                                              float64
+	JoinBurst                                                      int
 }
 
 func (o Options) defaults() Options {
@@ -53,6 +56,12 @@ func (o Options) defaults() Options {
 	if o.Burst <= 0 {
 		o.Burst = 20
 	}
+	if o.JoinRatePerSecond <= 0 {
+		o.JoinRatePerSecond = .5
+	}
+	if o.JoinBurst <= 0 {
+		o.JoinBurst = 20
+	}
 	return o
 }
 
@@ -62,6 +71,7 @@ type Server struct {
 	options  Options
 	mu       sync.Mutex
 	peers    map[*peer]struct{}
+	joiners  map[string]*joinBucket
 	stopping bool
 	workers  sync.WaitGroup
 	queued   atomic.Int64
@@ -71,19 +81,23 @@ type Server struct {
 	sent     atomic.Uint64
 	slow     atomic.Uint64
 }
+type joinBucket struct {
+	tokens float64
+	last   time.Time
+}
 
 func New(store *room.Store, maxConnections int) *Server {
 	return NewWithOptions(store, Options{MaxConnections: maxConnections})
 }
 func NewWithOptions(store *room.Store, options Options) *Server {
 	options = options.defaults()
-	return &Server{Store: store, options: options, slots: make(chan struct{}, options.MaxConnections), peers: make(map[*peer]struct{})}
+	return &Server{Store: store, options: options, slots: make(chan struct{}, options.MaxConnections), peers: make(map[*peer]struct{}), joiners: make(map[string]*joinBucket)}
 }
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"status":"ok","protocol":1}`))
+		_, _ = w.Write([]byte(`{"status":"ok","protocol":2}`))
 	})
 	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, r *http.Request) {
 		s.mu.Lock()
@@ -264,6 +278,11 @@ func (p *peer) heartbeat() {
 	}
 }
 func (s *Server) connect(w http.ResponseWriter, r *http.Request) {
+	if !s.allowJoin(r.RemoteAddr, time.Now()) {
+		s.rejected.Add(1)
+		http.Error(w, "too many join attempts", http.StatusTooManyRequests)
+		return
+	}
 	select {
 	case s.slots <- struct{}{}:
 		defer func() { <-s.slots }()
@@ -362,4 +381,40 @@ func (s *Server) connect(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+}
+
+func (s *Server) allowJoin(remote string, now time.Time) bool {
+	host, _, err := net.SplitHostPort(remote)
+	if err != nil {
+		host = remote
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	const maxJoinIPs = 4096
+	const idleTTL = 10 * time.Minute
+	if len(s.joiners) >= maxJoinIPs {
+		for ip, bucket := range s.joiners {
+			if now.Sub(bucket.last) >= idleTTL {
+				delete(s.joiners, ip)
+			}
+		}
+	}
+	bucket := s.joiners[host]
+	if bucket == nil {
+		if len(s.joiners) >= maxJoinIPs {
+			return false
+		}
+		bucket = &joinBucket{tokens: float64(s.options.JoinBurst), last: now}
+		s.joiners[host] = bucket
+	}
+	bucket.tokens += now.Sub(bucket.last).Seconds() * s.options.JoinRatePerSecond
+	if bucket.tokens > float64(s.options.JoinBurst) {
+		bucket.tokens = float64(s.options.JoinBurst)
+	}
+	bucket.last = now
+	if bucket.tokens < 1 {
+		return false
+	}
+	bucket.tokens--
+	return true
 }

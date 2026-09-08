@@ -17,6 +17,7 @@ type State struct {
 	ID, Code, Map      string
 	Revision, Sequence int64
 	Members            map[string]*Member
+	Identities         map[string]string
 }
 type Store struct {
 	mu     sync.Mutex
@@ -50,7 +51,7 @@ func (s *Store) Join(msg Message, sink Sink) (Lease, error) {
 		if len(s.rooms) >= s.config.MaxRooms {
 			return Lease{}, errors.New("server_full")
 		}
-		r = &State{ID: NewID(), Code: msg.Room, Map: msg.Map, Members: make(map[string]*Member)}
+		r = &State{ID: NewID(), Code: msg.Room, Map: msg.Map, Members: make(map[string]*Member), Identities: make(map[string]string)}
 		s.rooms[msg.Room] = r
 	}
 	old := r.Members[msg.UID]
@@ -66,14 +67,26 @@ func (s *Store) Join(msg Message, sink Sink) (Lease, error) {
 	r.Members[m.UID] = m
 	renamed := s.names(r)
 	r.Revision++
-	send(sink, Event{V: Protocol, Type: "snapshot", RoomID: r.ID, Room: r.Code, Map: r.Map, Revision: r.Revision, SessionID: m.SessionID, RequestID: msg.RequestID, Members: ordered(r)})
+	send(sink, s.snapshot(r, m, msg.RequestID))
 	s.emit(r, Event{Type: "member", Member: m})
 	for _, member := range renamed {
 		if member != m {
 			s.emit(r, Event{Type: "member", Member: member})
 		}
 	}
+	s.emitIdentities(r, append(renamed, m))
 	return Lease{Room: r.Code, UID: m.UID, SessionID: m.SessionID}, nil
+}
+func (s *Store) snapshot(r *State, m *Member, requestID string) Event {
+	return Event{V: Protocol, Type: "snapshot", RoomID: r.ID, Room: r.Code, Map: r.Map, Revision: r.Revision, SessionID: m.SessionID, RequestID: requestID, Members: ordered(r), Identities: identities(r)}
+}
+func identities(r *State) []Identity {
+	out := make([]Identity, 0, len(r.Identities))
+	for uid, name := range r.Identities {
+		out = append(out, Identity{UID: uid, Name: name})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].UID < out[j].UID })
+	return out
 }
 func ordered(r *State) []*Member {
 	out := make([]*Member, 0, len(r.Members))
@@ -99,10 +112,22 @@ func (s *Store) names(r *State) []*Member {
 				m.DisplayName = display
 				changed = append(changed, m)
 			}
+			r.Identities[m.UID] = display
 		}
 	}
 	sort.Slice(changed, func(i, j int) bool { return changed[i].Joined < changed[j].Joined })
 	return changed
+}
+func (s *Store) emitIdentities(r *State, members []*Member) {
+	seen := map[string]bool{}
+	for _, m := range members {
+		if seen[m.UID] {
+			continue
+		}
+		seen[m.UID] = true
+		identity := Identity{UID: m.UID, Name: m.DisplayName}
+		s.emit(r, Event{Type: "identity", Identity: &identity})
+	}
 }
 func (s *Store) emit(r *State, e Event) {
 	r.Revision++
@@ -155,6 +180,13 @@ func (s *Store) Apply(l Lease, msg Message) error {
 				s.emit(r, Event{Type: "member", Member: member})
 			}
 		}
+		s.emitIdentities(r, renamed)
+	case "sync":
+		if !m.lastSync.IsZero() && s.now().Sub(m.lastSync) < 2*time.Second {
+			return errors.New("sync_rate_limited")
+		}
+		m.lastSync = s.now()
+		send(m.sink, s.snapshot(r, m, msg.RequestID))
 	case "origin":
 		if msg.Point != nil && !msg.Point.Valid() {
 			return ErrInvalid
@@ -198,7 +230,7 @@ func (s *Store) Apply(l Lease, msg Message) error {
 			}
 		}
 		r.Sequence++
-		task := &Task{ID: msg.TaskID, Sequence: r.Sequence, CreatedAt: s.now().UTC(), Point: msg.Point, SolvedBy: []Actor{}}
+		task := &Task{ID: msg.TaskID, Sequence: r.Sequence, CreatedAt: s.now().UTC(), Point: msg.Point, SolvedBy: []string{}}
 		for _, gunner := range ordered(r) {
 			if gunner.Role == "gunner" && gunner.Online && gunner.Solved && Same(gunner.Target, task.Point) {
 				remember(task, gunner)
@@ -220,12 +252,15 @@ func (s *Store) Apply(l Lease, msg Message) error {
 	return nil
 }
 func remember(task *Task, m *Member) bool {
-	for _, a := range task.SolvedBy {
-		if a.UID == m.UID {
+	for _, uid := range task.SolvedBy {
+		if uid == m.UID {
 			return false
 		}
 	}
-	task.SolvedBy = append(task.SolvedBy, Actor{UID: m.UID, Name: m.DisplayName})
+	if len(task.SolvedBy) >= MaxSolverRefs {
+		return false
+	}
+	task.SolvedBy = append(task.SolvedBy, m.UID)
 	return true
 }
 func (s *Store) Leave(l Lease) {
@@ -256,9 +291,26 @@ func (s *Store) sweepLocked() {
 		if len(r.Members) == 0 {
 			delete(s.rooms, code)
 		} else if changed {
+			s.pruneIdentities(r)
 			for _, m := range s.names(r) {
 				s.emit(r, Event{Type: "member", Member: m})
 			}
+		}
+	}
+}
+func (s *Store) pruneIdentities(r *State) {
+	keep := map[string]bool{}
+	for uid, m := range r.Members {
+		keep[uid] = true
+		for _, task := range m.Tasks {
+			for _, solver := range task.SolvedBy {
+				keep[solver] = true
+			}
+		}
+	}
+	for uid := range r.Identities {
+		if !keep[uid] {
+			delete(r.Identities, uid)
 		}
 	}
 }

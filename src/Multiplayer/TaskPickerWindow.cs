@@ -91,7 +91,7 @@ public sealed class TaskPickerWindow : Window
         foreach (var choice in choices)
         {
             var task = choice.Task; var current = task.Point.Map == c.State.Map && task.Point.Coordinate == c.State.Current.Target;
-            var status = task.SolvedBy.Count == 0 ? "尚未解算" : "已解算：" + string.Join("、", task.SolvedBy.Select(x => x.Name));
+            var status = task.SolvedBy.Count == 0 ? "尚未解算" : "已解算：" + string.Join("、", task.SolvedBy.Select(state.ResolveName));
             var solving = state.Members.Values.Where(m => m.Online && m.Role == "gunner" && m.Solved && m.Target?.Same(task.Point) == true).Select(m => m.DisplayName).ToArray();
             if (solving.Length > 0) status += " · 正在解算：" + string.Join("、", solving);
             list.Items.Add(new ListBoxItem { Content = new TextBlock { Text = $"{(current ? "● 当前目标 · " : "")}{choice.Name} · 任务 {task.Sequence}\n{task.Point.Coordinate} · {task.Point.Map}\n{status}", TextWrapping = TextWrapping.Wrap, FontSize = 12 }, Padding = new Thickness(7), Tag = choice });

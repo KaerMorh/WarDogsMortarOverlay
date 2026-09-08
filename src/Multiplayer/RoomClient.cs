@@ -18,18 +18,22 @@ public sealed class RoomClient : IAsyncDisposable
     public RoomMessage? ReconnectProfile { get; set; }
     public event Action<RoomEvent>? Received;
     public event Action<string>? StatusChanged;
-    public async Task StartAsync(Uri uri, RoomMessage join)
+    public event Action? Ended;
+    public async Task StartAsync(Uri uri, RoomMessage join, CancellationToken cancellationToken = default)
     {
         if (uri.Scheme is not ("ws" or "wss")) throw new ArgumentException("服务地址必须以 ws:// 或 wss:// 开头。");
         if (uri.Scheme == "ws" && !uri.IsLoopback) throw new ArgumentException("公网服务请使用 wss://；ws:// 仅供本机开发。");
         await StopAsync();
         ReconnectProfile = join;
-        lifetime = new CancellationTokenSource();
-        runner = RunAsync(uri, join, lifetime.Token);
+        lifetime = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var initialJoin = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        runner = RunAsync(uri, join, initialJoin, lifetime.Token);
+        await initialJoin.Task;
     }
-    async Task RunAsync(Uri uri, RoomMessage join, CancellationToken token)
+    async Task RunAsync(Uri uri, RoomMessage join, TaskCompletionSource initialJoin, CancellationToken token)
     {
         var attempt = 0;
+        var terminal = false;
         while (!token.IsCancellationRequested)
         {
             using var ws = new ClientWebSocket();
@@ -48,17 +52,29 @@ public sealed class RoomClient : IAsyncDisposable
                     var e = await ReadAsync(ws, connected ? token : joinDeadline.Token);
                     if (e == null)
                     {
-                        if ((int?)ws.CloseStatus == 4001) { StatusChanged?.Invoke("身份已在另一连接进入房间 · 已停止重连"); return; }
+                        if ((int?)ws.CloseStatus == 4001)
+                        {
+                            var error = new IOException("身份已在另一连接进入房间 · 已停止重连");
+                            terminal = true; StatusChanged?.Invoke(error.Message); initialJoin.TrySetException(error); break;
+                        }
                         throw new IOException("连接已关闭");
                     }
-                    if (e.V != Protocol.Version) { StatusChanged?.Invoke("服务端协议版本不兼容"); return; }
+                    if (e.V != Protocol.Version)
+                    {
+                        var error = new IOException("服务端协议版本不兼容");
+                        StatusChanged?.Invoke(error.Message); initialJoin.TrySetException(error); terminal = true; break;
+                    }
                     if (e.Type == "error")
                     {
                         if (e.RequestId != null && pending.TryRemove(e.RequestId, out var rejected)) rejected.TrySetException(new IOException(ErrorText(e.Code)));
-                        if (e.Code == "session_replaced" || !connected) { StatusChanged?.Invoke(ErrorText(e.Code)); return; }
+                        if (e.Code == "session_replaced" || !connected)
+                        {
+                            var error = new IOException(ErrorText(e.Code));
+                            StatusChanged?.Invoke(error.Message); initialJoin.TrySetException(error); terminal = true; break;
+                        }
                     }
                     if (e.Type == "ack" && e.RequestId != null && pending.TryRemove(e.RequestId, out var ack)) ack.TrySetResult();
-                    if (e.Type == "snapshot") { connected = true; attempt = 0; StatusChanged?.Invoke("已加入房间 " + e.Room); }
+                    if (e.Type == "snapshot") { connected = true; attempt = 0; initialJoin.TrySetResult(); StatusChanged?.Invoke("已加入房间 " + e.Room); }
                     Received?.Invoke(e);
                 }
             }
@@ -73,10 +89,14 @@ public sealed class RoomClient : IAsyncDisposable
                 if (ReferenceEquals(socket, ws)) socket = null;
                 foreach (var item in pending) if (pending.TryRemove(item.Key, out var tcs)) tcs.TrySetException(new IOException("连接中断，操作未确认"));
             }
+            if (terminal) break;
             attempt++;
             try { await Task.Delay(TimeSpan.FromSeconds(Math.Min(30, Math.Pow(2, Math.Min(attempt, 5)))) + TimeSpan.FromMilliseconds(Random.Shared.Next(250)), token); }
             catch (OperationCanceledException) { break; }
         }
+        if (token.IsCancellationRequested) initialJoin.TrySetCanceled(token);
+        else initialJoin.TrySetException(new IOException("连接已关闭"));
+        Ended?.Invoke();
     }
     public async Task SendAsync(RoomMessage message, CancellationToken cancellationToken = default)
     {
