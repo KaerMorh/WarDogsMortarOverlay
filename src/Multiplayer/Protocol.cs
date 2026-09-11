@@ -5,7 +5,7 @@ namespace WarDogs.Multiplayer;
 
 public static class Protocol
 {
-    public const int Version = 2;
+    public const int Version = 3;
     public static readonly JsonSerializerOptions Json = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, PropertyNameCaseInsensitive = true };
 }
 
@@ -24,7 +24,6 @@ public sealed class RoomTask
     public long Sequence { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public NetworkPoint Point { get; set; } = new("bakurani", 0, 0);
-    public List<string> SolvedBy { get; set; } = new();
 }
 public sealed class RoomMember
 {
@@ -33,6 +32,7 @@ public sealed class RoomMember
     public string Callsign { get; set; } = "";
     public string DisplayName { get; set; } = "";
     public string Role { get; set; } = "gunner";
+    public string Weapon { get; set; } = "mortar";
     public string Map { get; set; } = "bakurani";
     public bool Online { get; set; }
     public DateTimeOffset? OfflineAt { get; set; }
@@ -40,6 +40,7 @@ public sealed class RoomMember
     public NetworkPoint? Origin { get; set; }
     public NetworkPoint? Target { get; set; }
     public bool Solved { get; set; }
+    public bool Declined { get; set; }
     public List<RoomTask> Tasks { get; set; } = new();
 }
 public sealed class RoomMessage
@@ -51,10 +52,12 @@ public sealed class RoomMessage
     public string? Uid { get; set; }
     public string? Callsign { get; set; }
     public string? Role { get; set; }
+    public string? Weapon { get; set; }
     public string? Map { get; set; }
     public string? TaskId { get; set; }
     public NetworkPoint? Point { get; set; }
     public bool Solved { get; set; }
+    public bool Declined { get; set; }
 }
 public sealed class RoomEvent
 {

@@ -20,7 +20,7 @@ internal static class LoadTest
                 for (var i = 0; i < count; i++)
                 {
                     var client = new RoomClient(); clients.Add(client); client.Received += _ => Interlocked.Increment(ref events);
-                    await client.StartAsync(uri, new() { Type = "join", Uid = Guid.NewGuid().ToString("D"), Room = "load-" + token + "-" + (count == 32 ? 0 : i / 10), Callsign = "Load" + i, Role = "gunner", Map = "bakurani" });
+                    await client.StartAsync(uri, new() { Type = "join", Uid = Guid.NewGuid().ToString("D"), Room = "load-" + token + "-" + (count == 32 ? 0 : i / 10), Callsign = "Load" + i, Role = "gunner", Map = "bakurani", Weapon = "mortar" });
                     // Stagger joins: test steady state, not an artificial synchronized reconnect storm.
                     await Task.Delay(15);
                 }

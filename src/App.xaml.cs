@@ -22,7 +22,7 @@ public partial class App:Application
         Control.Hud=new HudWindow(Control);Control.Hud.Show();
         tray=new TrayIcon(Control);Control.InitializeNative(main,!verifyMultiplayer);Control.Refresh();
         if(!Control.Demo) _ = InitializeUpdatesAsync();
-        if(!Control.Demo&&Control.Pref.Multiplayer.AutoJoin) _ = Control.Rooms.JoinAsync();
+        if(!Control.Demo&&Control.Pref.EnableTestFeatures&&Control.Pref.Multiplayer.AutoJoin) _ = Control.Rooms.JoinAsync();
         if(verifyMultiplayer)Dispatcher.BeginInvoke(new Action(async()=>{await WarDogs.Multiplayer.MultiplayerVerification.RunAsync(Control,e.Args.FirstOrDefault(a=>a.StartsWith("--server="))?[9..]);Control.Quit();}));
         if(verify){main.Show();Dispatcher.BeginInvoke(new Action(async()=>{await main.VerifyAndCapture();if(e.Args.Contains("--verify-exit"))Control.Quit();}));}
     }

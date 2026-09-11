@@ -1,4 +1,4 @@
-# WarDogs Overlay 0.6.3
+# WarDogs Overlay 0.6.4
 
 联机开发分支使用 **Go WebSocket 服务端 + C# 客户端**，新增模块在独立可拖动窗口中。继续开发请先阅读 [联机开发方案](docs/联机开发方案.md)、[消息协议](docs/联机协议.md) 和 [开发进度](docs/联机开发进度.md)。使用 `build-multiplayer.ps1` 构建到 `artifacts/multiplayer/`，不覆盖下方稳定版 `app/`。
 
@@ -84,6 +84,6 @@ Windows 桌面火力计算器：C# / WPF HUD + WebView2 离线交互地图。
 同一 Windows 会话禁止双开，再次启动唤回已有 HUD。更新区域与下方菜单通过卡片及分隔线区分。下载成功的包在下次启动时离线验签和验哈希后恢复；联网检查可复用旧版留下的相同包。已安装或被替代的更新包、损坏包、未完成下载会清理，保留日志及设置备份。没有签名元数据的旧版遗留包最多保留七天等待联网验证。
 
 
-## v0.6.3 托盘与悬浮窗优化
+## v0.6.4 坐标兼容与联机测试
 
-详见 [更新说明](installer/release-notes-0.6.3.md)。
+详见 [更新说明](installer/release-notes-0.6.4.md)。

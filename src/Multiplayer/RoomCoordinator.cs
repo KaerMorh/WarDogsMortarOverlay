@@ -42,7 +42,7 @@ public sealed class RoomCoordinator
         timer.Start();
     }
     MultiplayerPreferences Pref => controller.Pref.Multiplayer;
-    RoomMessage Profile(string type) => new() { Type = type, Uid = uid, Room = joinedRoom ?? Pref.Room.Trim().ToLowerInvariant(), Callsign = Pref.Callsign.Trim(), Role = Pref.Role, Map = controller.State.Map };
+    RoomMessage Profile(string type) => new() { Type = type, Uid = uid, Room = joinedRoom ?? Pref.Room.Trim().ToLowerInvariant(), Callsign = Pref.Callsign.Trim(), Role = Pref.Role, Map = controller.State.Map, Weapon = controller.State.Weapon };
     string RequestedKey => Pref.ServerUrl.Trim() + "\n" + Pref.Room.Trim().ToLowerInvariant();
     public Task JoinAsync() => JoinAsync(false);
     internal Task JoinForVerificationAsync() => JoinAsync(true);
@@ -133,7 +133,7 @@ public sealed class RoomCoordinator
             using var deadline = CancellationTokenSource.CreateLinkedTokenSource(intent.Token);
             deadline.CancelAfter(remaining);
             lastConnectionAttempt = DateTimeOffset.UtcNow;
-            var join = new RoomMessage { Type = "join", Uid = uid, Room = room, Callsign = callsign, Role = role, Map = map };
+            var join = new RoomMessage { Type = "join", Uid = uid, Room = room, Callsign = callsign, Role = role, Map = map, Weapon = controller.State.Weapon };
             try { await next.StartAsync(uri, join, deadline.Token); }
             catch (OperationCanceledException) when (!intent.IsCancellationRequested) { throw new TimeoutException("连接超时 · 请检查服务地址和网络"); }
             await Task.Delay(TimeSpan.FromSeconds(1), intent.Token);

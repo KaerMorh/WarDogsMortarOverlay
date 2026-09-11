@@ -22,6 +22,7 @@ public class Preferences
 {
     public MultiplayerPreferences Multiplayer{get;set;}=new();
     public bool AutoCheckUpdates{get;set;}=true;
+    public bool EnableTestFeatures{get;set;}
     public Session Session{get;set;}=new();
     public Dictionary<string,string> Keys{get;set;}=new(){{"origin","Ctrl+Alt+1"},{"target","Ctrl+Alt+2"},{"pause","Ctrl+Alt+P"},{"hud","Ctrl+Alt+H"},{"mode","Ctrl+Alt+M"},{"map","Ctrl+Alt+G"}};
     public double HudLeft{get;set;}=double.NaN;public double HudTop{get;set;}=80;
@@ -113,7 +114,7 @@ public class Controller
     void AddHistory(HistoryEntry entry){History.Insert(0,entry);while(History.Count>100)History.RemoveAt(History.Count-1);Notices.Insert(0,entry.FullText.Replace('\n',' '));if(Notices.Count>20)Notices.RemoveAt(20);}
     public void RecordRoomTask(RoomMember member,RoomTask task)
     {
-        var shared=new SharedTaskHistory{RoomId=Rooms.State.RoomId,TaskId=task.Id,PublisherUid=member.Uid,Sequence=task.Sequence,Point=task.Point};shared.Remember(task.SolvedBy,Rooms.State);
+        var shared=new SharedTaskHistory{RoomId=Rooms.State.RoomId,TaskId=task.Id,PublisherUid=member.Uid,Sequence=task.Sequence,Point=task.Point};shared.UpdateNames(Rooms.State);
         AddHistory(new(task.CreatedAt.LocalDateTime,"",new(task.Point.Map,State.Weapon,Awaiting.Target,task.Point.Coordinate,"房间任务"),TowerProximity.Describe(task.Point.Coordinate,Towers[task.Point.Map]),shared));
     }
     public void UpdateRoomHistory()
@@ -123,7 +124,6 @@ public class Controller
             var before=shared.Status;shared.UpdateNames(Rooms.State);
             foreach(var member in Rooms.State.Members.Values)
             {
-                foreach(var task in member.Tasks.Where(t=>t.Id==shared.TaskId))shared.Remember(task.SolvedBy,Rooms.State);
                 if(member.Role=="gunner"&&member.Solved&&member.Target?.Same(shared.Point)==true)shared.Remember(new[]{member.Uid},Rooms.State);
             }
             if(shared.Status!=before)History[i]=History[i] with {};
@@ -158,6 +158,8 @@ public class Controller
     public async void Act(string action)
     {
         requestRevision++;
+        if(!Pref.EnableTestFeatures&&action is "publishTask" or "roomTasks" or "roomPrevious" or "roomNext" or "roomConfirm" or "roomCancel")
+        {Notify("请先在设置第一页开启测试功能");return;}
         if(action is "origin" or "target" or "pause" or "map" or "mode")Rooms.Capture.Cancel();
         switch(action)
         {

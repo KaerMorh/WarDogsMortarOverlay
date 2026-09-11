@@ -31,7 +31,6 @@ internal static class MultiplayerVerification
                 members.Add(m);
             }
             members[2].Origin = new("bakurani", 80.52, 69.85); members[2].Target = members[0].Tasks[0].Point; members[2].Solved = true;
-            members[0].Tasks[0].SolvedBy.Add(members[2].Uid);
             c.Rooms.State.Apply(new() { V = Protocol.Version, Type = "snapshot", RoomId = "preview", Room = "demo", Map = "bakurani", Revision = 1, SessionId = "preview", Members = members, Identities = members.Select(m => new RoomIdentity(m.Uid, m.DisplayName)).ToList() });
             c.UpdateRoomHistory(); c.Refresh();
             Check(c.History.Count(h => h.Shared != null) == 9, "all nine tasks recorded once");
@@ -88,7 +87,7 @@ internal static class MultiplayerVerification
         {
             var watch = Stopwatch.StartNew(); while (!predicate()) { if (watch.Elapsed > TimeSpan.FromSeconds(12)) throw new Exception("Timeout: " + label); await Task.Delay(25); } check(true, label);
         }
-        await observer.StartAsync(uri, new() { Type = "join", Uid = Guid.NewGuid().ToString("D"), Callsign = "Observer", Room = room, Role = "scout", Map = "bakurani" });
+        await observer.StartAsync(uri, new() { Type = "join", Uid = Guid.NewGuid().ToString("D"), Callsign = "Observer", Room = room, Role = "scout", Map = "bakurani", Weapon = "mortar" });
         var joinWatch=Stopwatch.StartNew();var firstJoin=c.Rooms.JoinForVerificationAsync();var duplicateJoin=c.Rooms.JoinForVerificationAsync();
         check(ReferenceEquals(firstJoin,duplicateJoin),"duplicate join clicks share one operation");
         await firstJoin;

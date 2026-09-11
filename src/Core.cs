@@ -17,6 +17,10 @@ public static class Coordinates
     public static Coord? Parse(string? text, bool manual = false)
     {
         if (string.IsNullOrWhiteSpace(text) || text.Length > 8192) return null;
+        // The game may put punctuation between the labeled coordinates, for example
+        // "x98.62, y109.57". Only treat punctuation followed by the other axis label
+        // as a separator, so decimal-comma values such as "x12,11 y11,11" stay valid.
+        text=Regex.Replace(text,@"(?<=\d)\s*[,，;；]\s*(?=[xy]\s*[:=]?\s*[+-]?\d)"," ",RegexOptions.IgnoreCase);
         var labels = Label.Matches(text); var matches = Pair.Matches(text);
         if (labels.Count == 2 && matches.Count == 2 &&
             !matches[0].Groups["axis"].Value.Equals(matches[1].Groups["axis"].Value,StringComparison.OrdinalIgnoreCase))

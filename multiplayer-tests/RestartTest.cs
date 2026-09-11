@@ -20,7 +20,7 @@ internal static class RestartTest
         }
         try
         {
-            await client.StartAsync(new("ws://127.0.0.1:" + port + "/ws"), new() { Type = "join", Uid = Guid.NewGuid().ToString("D"), Room = "restart-test", Callsign = "Restart", Role = "gunner", Map = "bakurani" });
+            await client.StartAsync(new("ws://127.0.0.1:" + port + "/ws"), new() { Type = "join", Uid = Guid.NewGuid().ToString("D"), Room = "restart-test", Callsign = "Restart", Role = "gunner", Map = "bakurani", Weapon = "mortar" });
             await Until(() => client.Connected && snapshots.Count == 1, "initial server connection");
             await client.SendAsync(new() { Type = "publish", TaskId = Guid.NewGuid().ToString("D"), Point = new("bakurani", 80, 70) });
             server.Kill(); await server.WaitForExitAsync(); server.Dispose(); server = null;

@@ -48,14 +48,14 @@ if (args.Length > 0)
     a.Received += aEvents.Enqueue; b.Received += bEvents.Enqueue;
     var room = "test-" + Guid.NewGuid().ToString("N")[..12];
     var uidA = Guid.NewGuid().ToString("D");
-    RoomMessage Join(string uid) => new() { Type = "join", Room = room, Uid = uid, Callsign = "Same", Role = "gunner", Map = "bakurani" };
+    RoomMessage Join(string uid) => new() { Type = "join", Room = room, Uid = uid, Callsign = "Same", Role = "gunner", Map = "bakurani", Weapon = "mortar" };
     async Task Until(Func<bool> condition, string label)
     {
         var watch = Stopwatch.StartNew();
         while (!condition()) { if (watch.Elapsed > TimeSpan.FromSeconds(12)) throw new Exception("Timeout: " + label); await Task.Delay(30); }
         Check(true, label);
     }
-    await a.StartAsync(uri, Join(uidA)); await b.StartAsync(uri, Join(Guid.NewGuid().ToString("D")));
+    var uidB=Guid.NewGuid().ToString("D");await a.StartAsync(uri, Join(uidA)); await b.StartAsync(uri, Join(uidB));
     await Until(() => a.Connected && b.Connected, "C# clients join real Go server");
     await Until(() => bEvents.Any(e => e.Member?.DisplayName == "Same#2") || bEvents.Any(e => e.Members.Any(m => m.DisplayName == "Same#2")), "duplicate callsign labels transmitted");
     var taskId = Guid.NewGuid().ToString("D"); var point = new NetworkPoint("bakurani", 80, 70);
@@ -64,8 +64,8 @@ if (args.Length > 0)
     await a.SendAsync(new() { Type = "publish", TaskId = taskId, Point = point });
     Check(bEvents.Where(e => e.Member?.Uid == uidA).Last().Member!.Tasks.Count == 1, "repeated task ID does not duplicate");
     await b.SendAsync(new() { Type = "target", Point = point, Solved = true });
-    await Until(() => aEvents.Any(e => e.Member?.Tasks.Any(t => t.Id == taskId && t.SolvedBy.Count == 1) == true), "successful solver attribution");
-    await a.SendAsync(new() { Type = "profile", Callsign = "Renamed", Role = "gunner", Map = "bakurani" });
+    await Until(() => aEvents.Any(e => e.Member is { } m&&m.Uid==uidB&&m.Solved&&m.Target?.Same(point)==true), "successful solver state relayed for client attribution");
+    await a.SendAsync(new() { Type = "profile", Callsign = "Renamed", Role = "gunner", Map = "bakurani", Weapon = "mortar" });
     await Until(() => bEvents.Any(e => e.Identity?.Uid == uidA && e.Identity.Name == "Renamed"), "latest identity update crosses protocol boundary");
     var snapshotCount = bEvents.Count(e => e.Type == "snapshot");
     var originalSession = bEvents.First(e => e.Type == "snapshot").SessionId;
@@ -98,7 +98,7 @@ static class BotsTest
             else if (e.Type == "removed" && e.Uid != null) members.TryRemove(e.Uid, out _);
         }
         gunner.Received += Observe; scout.Received += Observe;
-        RoomMessage Join(string role) => new() { Type = "join", Uid = Guid.NewGuid().ToString("D"), Callsign = "E2E " + role, Room = "testzz4z", Role = role, Map = "bakurani" };
+        RoomMessage Join(string role) => new() { Type = "join", Uid = Guid.NewGuid().ToString("D"), Callsign = "E2E " + role, Room = "testzz4z", Role = role, Map = "bakurani", Weapon = "mortar" };
         async Task Until(Func<bool> predicate, string label)
         {
             var watch = Stopwatch.StartNew();
@@ -115,7 +115,7 @@ static class BotsTest
         var beacon = new NetworkPoint("bakurani", 80, 70); var beaconId = Guid.NewGuid().ToString("D");
         await scout.SendAsync(new() { Type = "publish", TaskId = beaconId, Point = beacon });
         await Until(() => members.TryGetValue(GunnerBot, out var bot) && bot.Origin?.Same(new("bakurani", 82, 72)) == true, "gunner bot sets beacon plus two origin");
-        await Until(() => members.Values.SelectMany(m => m.Tasks).Any(t => t.Id == beaconId && t.SolvedBy.Contains(GunnerBot)), "gunner bot reports simulated solved attribution");
+        await Until(() => members.TryGetValue(GunnerBot,out var bot)&&bot.Solved&&bot.Target?.Same(beacon)==true, "gunner bot reports simulated solved state");
         await Task.Delay(1500);
         var replies = members.TryGetValue(ScoutBot, out var scoutBot) ? scoutBot.Tasks.Count(t => t.Point.Same(response)) : 0;
         if (replies != 1) throw new Exception("bot event loop or duplicate response detected: " + replies);

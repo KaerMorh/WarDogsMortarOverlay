@@ -83,7 +83,7 @@ public partial class MainWindow:Window
         void Check(bool ok,string text){if(!ok)throw new Exception(text);log.Add("PASS "+text);}
         try
         {
-            var defaults=new Preferences();Check(defaults.BubbleReadout&&defaults.HudOpacity==0.5683815809559255&&defaults.HudButtonOpacity==.75&&defaults.HudTileOpacity==.75,"recorded opacity defaults and enabled bubble readout");
+            var defaults=new Preferences();Check(defaults.BubbleReadout&&!defaults.EnableTestFeatures&&defaults.HudOpacity==0.5683815809559255&&defaults.HudButtonOpacity==.75&&defaults.HudTileOpacity==.75,"recorded appearance defaults and disabled test features");
             for(int n=0;n<100&&!ready;n++)await Task.Delay(100);
             Check(ready,"WebView2 local map ready");
             Check(c.Result?.Single?.ToString()=="690","HUD initial demo 300m -> 690 MIL");
@@ -97,6 +97,7 @@ public partial class MainWindow:Window
             c.Manual("x83.52 y69.85大大的asadasd",false);await Task.Delay(100);
             Check(c.State.Current.Target==new Coord(83.52,69.85),"manual suffix parser through UI controller");
             var target=await MapView.CoreWebView2.ExecuteScriptAsync("state.target.x");Check(Math.Abs(double.Parse(target,System.Globalization.CultureInfo.InvariantCulture)-83.52)<1e-8,"C# target -> WebView marker");
+            c.Manual("x98.62, y109.57",false);Check(c.State.Current.Target==new Coord(98.62,109.57),"new comma-separated game coordinates through UI controller");
             c.State.ChangeMap();await Task.Delay(900);
             var oz=await MapView.CoreWebView2.ExecuteScriptAsync("state.map==='ozeti' && [...cache.values()].some(i=>i.complete&&i.naturalWidth>0)");Check(oz=="true","Ozeti offline tiles and map switch");
             Check(await MapView.CoreWebView2.ExecuteScriptAsync("state.towers.length===4")=="true","Ozeti tower markers");
@@ -120,6 +121,8 @@ public partial class MainWindow:Window
             {
                 for(int i=0;i<VisualTreeHelper.GetChildrenCount(root);i++){var child=VisualTreeHelper.GetChild(root,i);if(child is Button button)yield return button;foreach(var nested in Buttons(child))yield return nested;}
             }
+            c.Pref.EnableTestFeatures=false;c.Hud.OpenSettings();c.Hud.UpdateLayout();Check(!Buttons(c.Hud).Any(b=>b.Content as string=="联机"),"multiplayer settings hidden by default");
+            var testing=FindVisuals<CheckBox>(c.Hud).First(x=>x.Content as string=="开启测试功能（显示联机设置）");testing.IsChecked=true;testing.RaiseEvent(new RoutedEventArgs(CheckBox.ClickEvent));await Task.Delay(100);c.Hud.UpdateLayout();Check(Buttons(c.Hud).Any(b=>b.Content as string=="联机"),"test feature option reveals multiplayer settings");c.Hud.SetForm("panel");
             c.Hud.ExpandHistory();await Task.Delay(100);
             var historyButton=Buttons(c.Hud).First(b=>b.DataContext is HistoryEntry {Position.Role:Awaiting.Target});var chosen=(HistoryEntry)historyButton.DataContext;
             historyButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));Check(c.State.Current.Target==chosen.Position!.Coordinate&&c.State.Current.Source=="历史恢复","actual history button restores coordinate");
@@ -194,6 +197,10 @@ public partial class MainWindow:Window
         }
         var tip=new ToolTip{Content="设置炮位 / 等待新坐标\n快捷键：Ctrl+Alt+1",PlacementTarget=c.Hud,IsOpen=true};await Task.Delay(200);tip.UpdateLayout();Save(Render(tip),Path.Combine(dir,"tooltip.png"));tip.IsOpen=false;c.Pref.HudOpacity=1;
         ShowSettingsPage(this,new RoutedEventArgs());UpdateLayout();await Task.Delay(100);Save(Render(root),Path.Combine(dir,"settings.png"));ShowMapPage(this,new RoutedEventArgs());c.Hud.SetForm("panel");
+    }
+    static IEnumerable<T> FindVisuals<T>(DependencyObject root) where T:DependencyObject
+    {
+        for(int i=0;i<VisualTreeHelper.GetChildrenCount(root);i++){var child=VisualTreeHelper.GetChild(root,i);if(child is T match)yield return match;foreach(var nested in FindVisuals<T>(child))yield return nested;}
     }
 }
 
