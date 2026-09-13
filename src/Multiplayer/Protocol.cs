@@ -13,8 +13,8 @@ public record NetworkPoint(string Map, double X, double Y)
 {
     [JsonIgnore] public Coord Coordinate => new(X, Y);
     [JsonIgnore] public bool Valid => GameMaps.Valid(Map) && double.IsFinite(X) && double.IsFinite(Y) && X >= -.03 && X <= 163.81 && Y >= -.01 && Y <= 163.83;
-    public bool Same(NetworkPoint? other) => other != null && Map == other.Map && Quantize(X) == Quantize(other.X) && Quantize(Y) == Quantize(other.Y);
-    static double Quantize(double value) => Math.Round(value * 1e6, MidpointRounding.AwayFromZero);
+    public bool Same(NetworkPoint? other) => other != null && Map == other.Map && SameAxis(X,other.X) && SameAxis(Y,other.Y);
+    static bool SameAxis(double a,double b) => double.IsFinite(a)&&double.IsFinite(b)&&(Math.Abs(a)>9e9||Math.Abs(b)>9e9?a==b:Math.Round(a*1e6,MidpointRounding.AwayFromZero)==Math.Round(b*1e6,MidpointRounding.AwayFromZero));
 }
 public record Solver(string Uid, string Name);
 public record RoomIdentity(string Uid, string Name);

@@ -22,13 +22,23 @@ type Point struct {
 }
 
 func (p *Point) Valid() bool {
-	// Coordinates are opaque to the relay. Keep a generous, map-independent
-	// envelope so a new map never requires a server release.
-	return p != nil && validMap(p.Map) && finite(p.X) && finite(p.Y) && math.Abs(p.X) <= 1e6 && math.Abs(p.Y) <= 1e6
+	// The relay does not know a map's coordinate range.
+	return p != nil && validMap(p.Map) && finite(p.X) && finite(p.Y)
 }
 func finite(n float64) bool { return !math.IsNaN(n) && !math.IsInf(n, 0) }
 func Same(a, b *Point) bool {
-	return a != nil && b != nil && a.Map == b.Map && math.Round(a.X*1e6) == math.Round(b.X*1e6) && math.Round(a.Y*1e6) == math.Round(b.Y*1e6)
+	return a != nil && b != nil && a.Map == b.Map && sameAxis(a.X, b.X) && sameAxis(a.Y, b.Y)
+}
+func sameAxis(a, b float64) bool {
+	if !finite(a) || !finite(b) {
+		return false
+	}
+	// Beyond this point multiplying by 1e6 loses integer precision or
+	// overflows. Exact comparison avoids treating distinct huge values as equal.
+	if math.Abs(a) > 9e9 || math.Abs(b) > 9e9 {
+		return a == b
+	}
+	return math.Round(a*1e6) == math.Round(b*1e6)
 }
 func Equal(a, b *Point) bool  { return a == nil && b == nil || a != nil && b != nil && *a == *b }
 func validMap(s string) bool  { return mapPattern.MatchString(s) }

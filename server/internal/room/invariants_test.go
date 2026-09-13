@@ -42,11 +42,14 @@ func TestMapIdentifiersAreOpaque(t *testing.T) {
 			t.Fatalf("unsafe map ID accepted: %q", id)
 		}
 	}
-	if !(&Point{Map: "future-map_2030", X: 500000, Y: -500000}).Valid() {
-		t.Fatal("future map point inside map-independent safety envelope rejected")
+	if !(&Point{Map: "future-map_2030", X: math.MaxFloat64, Y: -500000}).Valid() {
+		t.Fatal("finite future-map coordinate rejected")
 	}
-	if (&Point{Map: "future-map_2030", X: 1000001}).Valid() || (&Point{Map: "future-map_2030", X: math.NaN()}).Valid() {
-		t.Fatal("unsafe coordinate accepted")
+	if (&Point{Map: "future-map_2030", X: math.NaN()}).Valid() || (&Point{Map: "future-map_2030", X: math.Inf(1)}).Valid() {
+		t.Fatal("nonfinite coordinate accepted")
+	}
+	if Same(&Point{Map: "future-map_2030", X: 1e200}, &Point{Map: "future-map_2030", X: 2e200}) {
+		t.Fatal("distinct large coordinates matched after quantization overflow")
 	}
 	s := New(Config{})
 	member, err := s.Join(Message{V: Protocol, Type: "join", UID: NewID(), Room: "zest", Callsign: "Z", Role: "gunner", Weapon: "mortar", Map: "future-map_2030"}, &capture{})
@@ -54,7 +57,7 @@ func TestMapIdentifiersAreOpaque(t *testing.T) {
 		t.Fatal(err)
 	}
 	apply(t, s, member, Message{Type: "profile", Callsign: "Z", Role: "gunner", Weapon: "mortar", Map: "another-map"})
-	point := &Point{Map: "future-map_2030", X: 500000, Y: -500000}
+	point := &Point{Map: "future-map_2030", X: 1e12, Y: -500000}
 	apply(t, s, member, Message{Type: "origin", Point: point})
 	apply(t, s, member, Message{Type: "target", Point: point, Solved: true})
 	apply(t, s, member, Message{Type: "publish", TaskID: NewID(), Point: point})

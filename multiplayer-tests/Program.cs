@@ -18,6 +18,7 @@ capture.Toggle(20); capture.Toggle(20); Check(!capture.Waiting, "second press ca
 Check(!new NetworkPoint("bakurani", 80, 70).Same(new("ozeti", 80, 70)), "map participates in coordinate match");
 Check(new NetworkPoint("zestafona", 80, 70).Valid, "Zestafona accepted as a network map");
 Check(new NetworkPoint("bakurani", 80.0000001, 70).Same(new("bakurani", 80.0000002, 70)), "six-place numeric matching");
+Check(!new NetworkPoint("future-map", 1e200, 0).Same(new("future-map", 2e200, 0)), "large remote coordinates remain distinct");
 Check(!new NetworkPoint("bakurani", double.NaN, 0).Valid, "reject nonfinite coordinate");
 var temp = Path.Combine(Path.GetTempPath(), "wardogs-identity-" + Guid.NewGuid().ToString("N"));
 try

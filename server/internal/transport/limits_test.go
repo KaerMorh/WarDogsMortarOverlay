@@ -74,7 +74,7 @@ func TestFutureMapRoundTrip(t *testing.T) {
 	if snapshot := readType(t, conn, "snapshot"); snapshot.Map != "future-map" {
 		t.Fatal("map ID changed during relay", snapshot.Map)
 	}
-	write(t, conn, room.Message{V: room.Protocol, Type: "publish", RequestID: "future", TaskID: room.NewID(), Point: &room.Point{Map: "future-map", X: 500000, Y: -500000}})
+	write(t, conn, room.Message{V: room.Protocol, Type: "publish", RequestID: "future", TaskID: room.NewID(), Point: &room.Point{Map: "future-map", X: 1e12, Y: -500000}})
 	if ack := readType(t, conn, "ack"); ack.RequestID != "future" {
 		t.Fatal("future map task was not accepted", ack)
 	}
@@ -120,7 +120,7 @@ func TestInvalidPointRejectedWithoutMutatingMember(t *testing.T) {
 	_, url := testServer(t, Options{})
 	conn := dial(t, url)
 	joinClient(t, conn)
-	write(t, conn, room.Message{V: room.Protocol, Type: "target", RequestID: "invalid", Point: &room.Point{Map: "other", X: 1000001, Y: 70}})
+	write(t, conn, room.Message{V: room.Protocol, Type: "target", RequestID: "invalid", Point: &room.Point{Map: "../other", X: 80, Y: 70}})
 	e := readType(t, conn, "error")
 	if e.Code != "invalid_message" || e.RequestID != "invalid" {
 		t.Fatal(e)
