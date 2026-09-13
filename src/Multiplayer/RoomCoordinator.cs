@@ -253,9 +253,9 @@ public sealed class RoomCoordinator
         if (!point.Valid) { controller.Notify("任务坐标无效"); return false; }
         if (controller.State.Map != point.Map)
         {
-            var answer = MessageBox.Show($"任务位于 {(point.Map == "bakurani" ? "Bakurani" : "Ozeti")}，切换地图并解算？", "任务地图不同", MessageBoxButton.YesNo, MessageBoxImage.Question);
+            var answer = MessageBox.Show($"任务位于 {GameMaps.Name(point.Map)}，切换地图并解算？", "任务地图不同", MessageBoxButton.YesNo, MessageBoxImage.Question);
             if (answer != MessageBoxResult.Yes) return false;
-            controller.State.ChangeMap();
+            controller.State.SelectMap(point.Map);
         }
         controller.CancelInputForRoomSelection();
         controller.State.SetTarget(point.Coordinate, source);

@@ -29,7 +29,7 @@ func Same(a, b *Point) bool {
 	return a != nil && b != nil && a.Map == b.Map && math.Round(a.X*1e6) == math.Round(b.X*1e6) && math.Round(a.Y*1e6) == math.Round(b.Y*1e6)
 }
 func Equal(a, b *Point) bool  { return a == nil && b == nil || a != nil && b != nil && *a == *b }
-func validMap(s string) bool  { return s == "bakurani" || s == "ozeti" }
+func validMap(s string) bool  { return s == "bakurani" || s == "ozeti" || s == "zestafona" }
 func validRole(s string) bool { return s == "gunner" || s == "scout" }
 
 // Weapon ids mirror the client's weapons.json. The server only gates the

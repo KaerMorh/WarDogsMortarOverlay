@@ -12,7 +12,7 @@ public static class Protocol
 public record NetworkPoint(string Map, double X, double Y)
 {
     [JsonIgnore] public Coord Coordinate => new(X, Y);
-    [JsonIgnore] public bool Valid => Map is "bakurani" or "ozeti" && double.IsFinite(X) && double.IsFinite(Y) && X >= -.03 && X <= 163.81 && Y >= -.01 && Y <= 163.83;
+    [JsonIgnore] public bool Valid => GameMaps.Valid(Map) && double.IsFinite(X) && double.IsFinite(Y) && X >= -.03 && X <= 163.81 && Y >= -.01 && Y <= 163.83;
     public bool Same(NetworkPoint? other) => other != null && Map == other.Map && Quantize(X) == Quantize(other.X) && Quantize(Y) == Quantize(other.Y);
     static double Quantize(double value) => Math.Round(value * 1e6, MidpointRounding.AwayFromZero);
 }

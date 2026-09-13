@@ -1,4 +1,4 @@
-# WarDogs Overlay 0.6.4
+# WarDogs Overlay 0.6.5
 
 联机开发分支使用 **Go WebSocket 服务端 + C# 客户端**，新增模块在独立可拖动窗口中。继续开发请先阅读 [联机开发方案](docs/联机开发方案.md)、[消息协议](docs/联机协议.md) 和 [开发进度](docs/联机开发进度.md)。使用 `build-multiplayer.ps1` 构建到 `artifacts/multiplayer/`，不覆盖下方稳定版 `app/`。
 
@@ -22,13 +22,13 @@ Windows 桌面火力计算器：C# / WPF HUD + WebView2 离线交互地图。
 
 ## 地图
 
-两图 Bakurani / Ozeti；左键拖动空白区域平移、滚轮缩放，点击放置当前选择的炮位/目标，拖动标记实时更新 HUD。“定位两点”可快速回到射击区域。地图默认设置目标；设置炮位需点击“设炮位”。
+三图 Bakurani / Ozeti / Zestafona；左键拖动空白区域平移、滚轮缩放，点击放置当前选择的炮位/目标，拖动标记实时更新 HUD。“定位两点”可快速回到射击区域。地图默认设置目标；设置炮位需点击“设炮位”。
 
-离线包包含上游 0–4 级瓦片（最高基础分辨率 4096×4096）；可继续放大，但超过原图精度时会变模糊。0–7 级全量高清瓦片尚未捆绑。切换地图直接恢复该图坐标，无需确认。两图包含上游 Tower 编号；点击 Tower 标记可直接选为目标。
+离线包包含上游 0–4 级瓦片（最高基础分辨率 4096×4096）；可继续放大，但超过原图精度时会变模糊。0–7 级全量高清瓦片尚未捆绑。切换地图直接恢复该图坐标，无需确认。三图包含上游 Tower 编号；点击 Tower 标记可直接选为目标。
 
 ## 数据与限制
 
-- 射表与两图参数固定于上游提交 `c3252c9d24a22d1aad5d3fa4408807aef591bb56`。
+- 射表与原两图参数固定于上游提交 `c3252c9d24a22d1aad5d3fa4408807aef591bb56`；Zestafona 地图取自 `4391d689f33a568a11f00ae6a34c4269df4ded0d`。
 - 迫击炮 132–684 m；SPH-2 780–2629 m，分别显示低抛和高抛密位。
 - 使用默认平地射表；不启用实验性高差与车体倾斜修正。
 - 配置保存在程序目录的 `UserData/settings.json`；地图浏览缓存也位于 UserData。
@@ -65,7 +65,7 @@ Windows 桌面火力计算器：C# / WPF HUD + WebView2 离线交互地图。
 
 下载安装包：https://github.com/KaerMorh/WarDogsMortarOverlay/releases/latest
 
-安装包面向 Windows 10/11 x64，默认安装在当前用户的 LocalAppData/Programs/WarDogsOverlay，支持自定义安装位置、开始菜单入口、可选桌面快捷方式和卸载。自带 .NET 与两图离线瓦片；缺少 WebView2 时会运行微软引导安装器，此步骤需要联网。升级保留 UserData；安装包不包含开发者坐标、配置、地图缓存或验证截图。
+安装包面向 Windows 10/11 x64，默认安装在当前用户的 LocalAppData/Programs/WarDogsOverlay，支持自定义安装位置、开始菜单入口、可选桌面快捷方式和卸载。自带 .NET 与三图离线瓦片；缺少 WebView2 时会运行微软引导安装器，此步骤需要联网。升级保留 UserData；安装包不包含开发者坐标、配置、地图缓存或验证截图。
 
 构建安装包：准备 Inno Setup 6 后运行 `./build-installer.ps1 -Iscc <ISCC.exe 路径>`，或使用项目 `.tools/inno/ISCC.exe`。构建脚本将从微软下载并校验 WebView2 引导安装器签名。成品与 SHA-256 位于 `artifacts/releases`。
 
@@ -87,3 +87,7 @@ Windows 桌面火力计算器：C# / WPF HUD + WebView2 离线交互地图。
 ## v0.6.4 坐标兼容与联机测试
 
 详见 [更新说明](installer/release-notes-0.6.4.md)。
+
+## v0.6.5 Zestafona 地图
+
+加入 Zestafona 的离线地图与 Tower 标记；右键菜单中的“隐藏 HUD”用红色底色和粗体突出显示。详见 [更新说明](installer/release-notes-0.6.5.md)。

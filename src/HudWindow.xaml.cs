@@ -155,9 +155,18 @@ public partial class HudWindow:Window
         void Add(string label,Action action,string? key=null)=>menu.Items.Add(Item(label,action,key));
         Add("打开大地图",()=>c.ShowMap());var settingsItem=Item("设置",()=>OpenSettings());settingsItem.Header=UpdatePanel.Badge("设置",c.Updates.HasUpdate);settingsItem.HeaderTemplate=null;menu.Items.Add(settingsItem);Add("还原界面",()=>ShowForm("panel"));Add("简化界面",()=>ShowForm("compact"));Add("小球模式",()=>ShowForm("bubble"));
         var minimal=Item("小球极简化 · 右侧纯文字读数",()=>{c.Pref.BubbleReadout=!c.Pref.BubbleReadout;c.Refresh();c.Save();});minimal.IsCheckable=true;minimal.IsChecked=c.Pref.BubbleReadout;menu.Items.Add(minimal);menu.Items.Add(new Separator());
-        foreach(var (id,label) in new[]{("origin","设置炮位 / 取消等待"),("target","选定目标"),("pause",c.State.Paused?"恢复接收":"暂停接收"),("hud",IsVisible?"隐藏 HUD":"显示 HUD")})Add(label,()=>c.Act(id),c.Pref.Keys.GetValueOrDefault(id));
+        foreach(var (id,label) in new[]{("origin","设置炮位 / 取消等待"),("target","选定目标"),("pause",c.State.Paused?"恢复接收":"暂停接收")})Add(label,()=>c.Act(id),c.Pref.Keys.GetValueOrDefault(id));
+        var hudLabel=(IsVisible?"● 隐藏 HUD":"显示 HUD")+"    "+c.Pref.Keys.GetValueOrDefault("hud");
+        var hudItem=Item(hudLabel,()=>c.Act("hud"));
+        if(IsVisible)
+        {
+            var emphasizedText=new FrameworkElementFactory(typeof(TextBlock));emphasizedText.SetBinding(TextBlock.TextProperty,new Binding());
+            emphasizedText.SetValue(TextBlock.ForegroundProperty,Brush("#8D2119"));emphasizedText.SetValue(TextBlock.FontWeightProperty,FontWeights.Bold);
+            hudItem.HeaderTemplate=new DataTemplate{VisualTree=emphasizedText};hudItem.Background=Brush("#F8D9D4");
+        }
+        menu.Items.Add(hudItem);
         var modeMenu=new MenuItem{Header="输入模式",HeaderTemplate=headerTemplate};foreach(var value in Enum.GetValues<InputMode>()){var item=Item(value==InputMode.Smart?"智能模式":value==InputMode.Manual?"精确手动":"连续目标",()=>{while(c.State.Mode!=value)c.Act("mode");});item.IsCheckable=true;item.IsChecked=c.State.Mode==value;modeMenu.Items.Add(item);}menu.Items.Add(modeMenu);
-        var mapMenu=new MenuItem{Header="地图",HeaderTemplate=headerTemplate};foreach(var (id,label) in new[]{("bakurani","Bakurani"),("ozeti","Ozeti")}){var item=Item(label,()=>{if(c.State.Map!=id)c.Act("map");});item.IsCheckable=true;item.IsChecked=c.State.Map==id;mapMenu.Items.Add(item);}menu.Items.Add(mapMenu);
+        var mapMenu=new MenuItem{Header="地图",HeaderTemplate=headerTemplate};foreach(var id in GameMaps.Ids){var item=Item(GameMaps.Name(id),()=>c.State.SelectMap(id));item.IsCheckable=true;item.IsChecked=c.State.Map==id;mapMenu.Items.Add(item);}menu.Items.Add(mapMenu);
         var weaponMenu=new MenuItem{Header="炮种",HeaderTemplate=headerTemplate};foreach(var (id,label) in new[]{("mortar","迫击炮"),("spg","SPH-2")}){var item=Item(label,()=>{if(c.State.Weapon!=id)c.Act("weapon");});item.IsCheckable=true;item.IsChecked=c.State.Weapon==id;weaponMenu.Items.Add(item);}menu.Items.Add(weaponMenu);
         menu.Items.Add(new Separator());Add("手动输入坐标",()=>OpenSettings("tools"));Add("本次记录 / 恢复坐标",()=>OpenSettings("history"));
         if(c.Pref.EnableTestFeatures){Add("联机房间 / 成员列表",()=>OpenSettings("room"));Add("发布任务 / 取消等待",()=>c.Act("publishTask"),c.Pref.Keys.GetValueOrDefault("publishTask"));Add("选择房间任务",()=>c.Act("roomTasks"),c.Pref.Keys.GetValueOrDefault("roomTasks"));}
@@ -188,7 +197,7 @@ public partial class HudWindow:Window
         if(mil!=null){mil.Text=r==null?"—":s.Weapon=="mortar"?r.Single?.ToString()??"—":$"{r.Low?.ToString()??"—"}/{r.High?.ToString()??"—"}";mil.FontSize=s.Weapon=="mortar"?(Form=="compact"?27:30):17;mil.Foreground=r is {InRange:false}?amber:blue;mil.ToolTip=s.Weapon=="spg"?"低抛 / 高抛":"迫击炮仰角";}
         if(status!=null){status.Text=Form=="bubble"?s.Paused?"Ⅱ":s.Waiting==Awaiting.Origin?"炮":s.Waiting==Awaiting.Target?"靶":"":$"● {s.Status} · {r?.Status??"等待坐标"}";status.Foreground=color;status.ToolTip=$"{s.Status} · {r?.Status??"等待坐标"}\n{c.Notices.FirstOrDefault()}";}
         if(bubbleDot!=null){bubbleDot.Fill=color;bubbleDot.Visibility=s.Paused||s.Waiting!=Awaiting.None?Visibility.Collapsed:Visibility.Visible;} if(weapon!=null)weapon.Content=(s.Weapon=="mortar"?"迫击炮":"SPH-2")+(Form=="compact"?"":" ↻");
-        ActionLabel(map,Form=="compact"?(s.Map=="bakurani"?"B图":"O图"):(s.Map=="bakurani"?"Bakurani ↻":"Ozeti ↻"),"map","切换地图 · 当前 "+s.Map);ActionLabel(mode,Form=="compact"?(s.Mode==InputMode.Smart?"智能":s.Mode==InputMode.Manual?"手动":"连续"):s.ModeText+" ↻","mode","切换坐标接收模式");
+        ActionLabel(map,Form=="compact"?GameMaps.ShortName(s.Map):GameMaps.Name(s.Map)+" ↻","map","切换地图 · 当前 "+s.Map);ActionLabel(mode,Form=="compact"?(s.Mode==InputMode.Smart?"智能":s.Mode==InputMode.Manual?"手动":"连续"):s.ModeText+" ↻","mode","切换坐标接收模式");
         ActionLabel(origin,"设炮位","origin","单击读取炮位 / 等待新坐标；双击粘贴输入；等待时再单击取消");ActionLabel(target,"选目标","target","单击读取目标 / 等待新坐标；双击粘贴输入");ActionLabel(pause,s.Paused?"恢复":"暂停","pause","停止 / 恢复坐标接收");
         if(origin?.Background is SolidColorBrush originBrush)
         {

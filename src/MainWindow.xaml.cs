@@ -50,12 +50,12 @@ public partial class MainWindow:Window
     void Render()
     {
         SettingsNav.Content=UpdatePanel.Badge("设置",c.Updates.HasUpdate);
-        var s=c.State;var r=c.Result;MapTitle.Text=s.Map=="bakurani"?"BAKURANI":"OZETI";
+        var s=c.State;var r=c.Result;MapTitle.Text=GameMaps.Name(s.Map).ToUpperInvariant();
         Distance.Text=r?.Distance.ToString("0")??"—";Azimuth.Text=r?.Azimuth?.ToString("0.0")??"—";
         Elevation.Text=r==null?"—":s.Weapon=="mortar"?r.Single?.ToString()??"—":$"{r.Low?.ToString()??"—"} / {r.High?.ToString()??"—"}";
         ArcLabel.Text=s.Weapon=="mortar"?"仰角 / MIL":"低抛 / 高抛 · MIL";
         RangeStatus.Text=r?.Status??"等待炮位与目标";
-        ModeButton.Content=s.ModeText+" ↻";WeaponButton.Content=(s.Weapon=="mortar"?"迫击炮":"SPH-2")+" ↻";MapSwitchButton.Content=(s.Map=="bakurani"?"Bakurani":"Ozeti")+" ↻";
+        ModeButton.Content=s.ModeText+" ↻";WeaponButton.Content=(s.Weapon=="mortar"?"迫击炮":"SPH-2")+" ↻";MapSwitchButton.Content=GameMaps.Name(s.Map)+" ↻";
         StateLabel.Text="●  "+s.Status;OriginLabel.Text=s.Current.Origin?.ToString()??"尚未设置";TargetLabel.Text=s.Current.Target?.ToString()??"尚未设置";
         SourceLabel.Text=$"来源 {s.Current.Source}   ·   {s.Current.Updated?.ToString("HH:mm:ss")??"—"}";
         PendingPanel.Visibility=c.Pending!=null?Visibility.Visible:Visibility.Collapsed;
@@ -101,7 +101,11 @@ public partial class MainWindow:Window
             c.State.ChangeMap();await Task.Delay(900);
             var oz=await MapView.CoreWebView2.ExecuteScriptAsync("state.map==='ozeti' && [...cache.values()].some(i=>i.complete&&i.naturalWidth>0)");Check(oz=="true","Ozeti offline tiles and map switch");
             Check(await MapView.CoreWebView2.ExecuteScriptAsync("state.towers.length===4")=="true","Ozeti tower markers");
-            c.State.ChangeMap();Check(c.Result!=null,"map positions restored directly without confirmation");
+            c.State.ChangeMap();
+            var ze="false";for(int n=0;n<100&&ze!="true";n++){await Task.Delay(100);ze=await MapView.CoreWebView2.ExecuteScriptAsync("state.map==='zestafona' && [...cache.values()].some(i=>i.complete&&i.naturalWidth>0)");}
+            Check(ze=="true","Zestafona offline tiles and map switch");
+            Check(await MapView.CoreWebView2.ExecuteScriptAsync("state.towers.length===3")=="true","Zestafona tower markers");
+            c.State.SelectMap("bakurani");Check(c.Result!=null,"map positions restored directly without confirmation");
             c.State.SetTarget(new(90,70),"验证");Check(c.Result is {InRange:false,Single:null},"out of range clears MIL");
             Check(!c.Bind("target",c.Pref.Keys["origin"]),"duplicate hotkey rejected without popup");
             c.Act("hud");Check(!c.Hud.IsVisible,"HUD hides");c.Act("hud");Check(c.Hud.IsVisible,"HUD restores");
@@ -150,7 +154,12 @@ public partial class MainWindow:Window
             c.Pref.HudButtonOpacity=0;c.Pref.HudTileOpacity=0;c.Refresh();Check(Buttons(c.Hud).All(b=>b.Background is SolidColorBrush {Color.A:0}),"button backgrounds independently reach zero opacity");
             var metricLabel=Texts(c.Hud).First(t=>t.Text=="距离 m");var tile=(Border)VisualTreeHelper.GetParent(VisualTreeHelper.GetParent(metricLabel));Check(tile.Background is SolidColorBrush {Color.A:0}&&metricLabel.Opacity==1,"tile background opacity does not fade text");
             c.Pref.HudButtonOpacity=1;c.Pref.HudTileOpacity=.94;c.State.SetTarget(new(81.52,70.85),"演示");
-            c.Hud.SetForm("bubble");var menu=c.Hud.BubbleMenu();menu.Items.OfType<MenuItem>().First(m=>m.Header.ToString()!.StartsWith("小球极简化")).RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            c.Hud.SetForm("bubble");var menu=c.Hud.BubbleMenu();
+            var hideHud=menu.Items.OfType<MenuItem>().First(m=>m.Header is string header&&header.StartsWith("● 隐藏 HUD"));
+            Check(hideHud.Background is SolidColorBrush {Color.R:248,Color.G:217,Color.B:212}&&hideHud.HeaderTemplate!=null,"hide HUD right-click item is highlighted");
+            var maps=menu.Items.OfType<MenuItem>().First(m=>m.Header as string=="地图");
+            Check(maps.Items.OfType<MenuItem>().Any(m=>m.Header as string=="Zestafona"),"right-click menu lists Zestafona");
+            menu.Items.OfType<MenuItem>().First(m=>m.Header.ToString()!.StartsWith("小球极简化")).RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
             Check(c.Pref.BubbleReadout&&Texts(c.Hud).Any(t=>t.Text=="141(m)  839 MIL  45.0 度"),"bubble menu enables units-only readout");
             var inputMenu=c.Hud.BubbleMenu().Items.OfType<MenuItem>().First(m=>m.Header.ToString()=="输入模式");inputMenu.Items.OfType<MenuItem>().First(m=>m.Header.ToString()=="精确手动").RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));Check(c.State.Mode==InputMode.Manual,"bubble menu selects explicit input mode");
             c.Hud.BubbleMenu().Items.OfType<MenuItem>().First(m=>m.Header is StackPanel badge&&badge.Children.OfType<TextBlock>().Any(t=>t.Text=="设置")).RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));Check(c.Hud.Form=="settings","bubble menu opens settings");

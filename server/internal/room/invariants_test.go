@@ -29,6 +29,14 @@ func TestRoomIsolationAndNoopUpdates(t *testing.T) {
 		t.Fatal("unchanged data broadcast")
 	}
 }
+func TestZestafonaJoinAndPublish(t *testing.T) {
+	s := New(Config{})
+	member, err := s.Join(Message{V: Protocol, Type: "join", UID: NewID(), Room: "zest", Callsign: "Z", Role: "gunner", Weapon: "mortar", Map: "zestafona"}, &capture{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	apply(t, s, member, Message{Type: "publish", TaskID: NewID(), Point: &Point{Map: "zestafona", X: 80, Y: 70}})
+}
 func TestCapacityAndTTLBoundary(t *testing.T) {
 	s := New(Config{MaxRooms: 1, MaxMembers: 1})
 	now := time.Now()

@@ -13,6 +13,11 @@
       "file": "ozeti.json"
     },
     {
+      "sha256": "7B1775E2D543D6AF59DB5F82702BB9E25D8C1E893A273E5898709F7B78A1FC27",
+      "file": "zestafona.json",
+      "commit": "4391d689f33a568a11f00ae6a34c4269df4ded0d"
+    },
+    {
       "sha256": "4A609DE0A094EE26BE58DA6B3EC2BD41AFB6DF5B105A27462A1999B27B5F8275",
       "file": "LICENSE"
     }

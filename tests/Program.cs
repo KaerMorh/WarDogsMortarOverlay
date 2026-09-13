@@ -24,7 +24,7 @@ s.OriginAction(o);Check(s.Waiting==Awaiting.Origin,"same origin waits");s.OnClip
 s.TargetAction(o);Check(s.Waiting==Awaiting.Target,"target equals origin waits");s.OnClipboard(t);Check(s.Current.Target==t&&s.Waiting==Awaiting.None,"target consume once");s.OnClipboard(new(82,70));Check(s.Current.Target==t,"smart idle no listening");
 s.TargetAction(t);Check(s.Waiting==Awaiting.Target,"same target waits");s.TogglePause();Check(s.Paused&&s.Waiting==Awaiting.None,"pause cancels");s.TogglePause();Check(!s.Paused&&s.Waiting==Awaiting.None,"resume idle");
 s.OriginAction(new(80,71));Check(s.Current.Target==null,"origin clears active target");
-s.ChangeMap();Check(s.Current.Origin==null,"map isolation");s.ChangeMap();Check(s.Current.Origin==new Coord(80,71),"restore map without confirmation");
+s.ChangeMap();Check(s.Current.Origin==null,"map isolation");s.ChangeMap();Check(s.Map=="zestafona"&&s.Current.Origin==null,"Zestafona separate map state");s.ChangeMap();Check(s.Current.Origin==new Coord(80,71),"restore map without confirmation");
 s.Mode=InputMode.Continuous;s.OnClipboard(t);Check(s.Current.Target==t,"continuous target");s.Mode=InputMode.Manual;s.OnClipboard(new(83,70));Check(s.Current.Target==t,"manual ignores events");
 var tower=new[]{new TowerInfo("Tower 1",new(10,10))};
 Check(TowerProximity.Describe(new(11,11),tower).Contains("T1 东北 · 距中心 141 m"),"tower northeast meters");

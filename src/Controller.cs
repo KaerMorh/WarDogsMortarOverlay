@@ -14,7 +14,7 @@ public record HistoryEntry(DateTime Time,string Message,PositionUpdate? Position
 {
     public string Color=>Position==null?"#CAD3DF":Position.Role==Awaiting.Origin?"#91C5FF":"#FFBD87";
     public string Title=>Shared is {} shared?$"{Time:HH:mm:ss}  {shared.PublisherName} · 任务 {shared.Sequence} · {shared.Point.Coordinate}":Position==null?$"{Time:HH:mm:ss}  {Message}":$"{Time:HH:mm:ss}  {(Position.Role==Awaiting.Origin?"炮位":"目标")} · {Position.Coordinate}";
-    public string Detail=>Position==null?"":$"{(Position.Map=="bakurani"?"Bakurani":"Ozeti")} · {(Shared!=null?Shared.Status:(Position.Weapon=="mortar"?"迫击炮":"SPH-2"))} · {Position.Source}\n{Proximity}";
+    public string Detail=>Position==null?"":$"{GameMaps.Name(Position.Map)} · {(Shared!=null?Shared.Status:(Position.Weapon=="mortar"?"迫击炮":"SPH-2"))} · {Position.Source}\n{Proximity}";
     public string FullText=>Title+(Detail.Length>0?"\n"+Detail:"");
     public string Hint=>Position==null?Message:$"点击恢复{(Position.Role==Awaiting.Origin?"炮位（位置改变会清除当前目标）":"目标")}；不同地图将自动切换。\n{FullText}";
 }
@@ -88,11 +88,11 @@ public class Controller
         foreach(var (action,key) in new[]{("publishTask","Ctrl+Alt+3"),("roomTasks","Ctrl+Alt+T"),("roomPrevious","Ctrl+Alt+Up"),("roomNext","Ctrl+Alt+Down"),("roomConfirm","Ctrl+Alt+Enter"),("roomCancel","Ctrl+Alt+Escape")})Pref.Keys.TryAdd(action,key);
         State=Pref.Session;
         if(!Enum.IsDefined(State.Mode))State.Mode=InputMode.Smart;
-        if(State.Map!="bakurani"&&State.Map!="ozeti")State.Map="bakurani";
+        if(!GameMaps.Valid(State.Map))State.Map="bakurani";
         if(State.Weapon!="mortar"&&State.Weapon!="spg")State.Weapon="mortar";
-        foreach(var id in new[]{"bakurani","ozeti"})if(!State.Maps.ContainsKey(id))State.Maps[id]=new();
+        foreach(var id in GameMaps.Ids)if(!State.Maps.ContainsKey(id))State.Maps[id]=new();
         Calculator=new(Path.Combine(Root,"Data","weapons.json"));
-        foreach(var id in new[]{"bakurani","ozeti"})
+        foreach(var id in GameMaps.Ids)
         {
             using var doc=JsonDocument.Parse(File.ReadAllText(Path.Combine(Root,"Data",id+".json")));
             Towers[id]=doc.RootElement.GetProperty("markers").EnumerateArray().Where(x=>x.GetProperty("icon").GetString()=="tower")
@@ -136,7 +136,7 @@ public class Controller
         if(entry.Shared is {} shared){Rooms.Select(shared.Point,"房间历史恢复");return;}
         if(entry.Position is not {} p)return;
         requestRevision++;Pending=null;dragUpdate=null;
-        if(State.Map!=p.Map)State.ChangeMap();
+        if(State.Map!=p.Map)State.SelectMap(p.Map);
         if(p.Role==Awaiting.Origin)State.SetOrigin(p.Coordinate,"历史恢复");else State.SetTarget(p.Coordinate,"历史恢复");
     }
     public void Refresh(){Updated?.Invoke();saveTimer.Stop();saveTimer.Start();}

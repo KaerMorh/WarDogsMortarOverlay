@@ -89,6 +89,13 @@ public enum InputMode { Continuous, Manual, Smart }
 public enum Awaiting { None, Origin, Target }
 public record PositionUpdate(string Map,string Weapon,Awaiting Role,Coord Coordinate,string Source);
 public record TowerInfo(string Label,Coord Center);
+public static class GameMaps
+{
+    public static readonly string[] Ids=["bakurani","ozeti","zestafona"];
+    public static bool Valid(string id)=>Ids.Contains(id);
+    public static string Name(string id)=>id switch {"bakurani"=>"Bakurani","ozeti"=>"Ozeti","zestafona"=>"Zestafona",_=>id};
+    public static string ShortName(string id)=>id switch {"bakurani"=>"B图","ozeti"=>"O图","zestafona"=>"Z图",_=>id};
+}
 public static class TowerProximity
 {
     public static string Describe(Coord point,IEnumerable<TowerInfo> towers)
@@ -116,7 +123,7 @@ public class Session
     public InputMode Mode{get;set;}=InputMode.Smart;
     public string Map{get;set;}="bakurani";
     public string Weapon{get;set;}="mortar";
-    public Dictionary<string,MapSession> Maps{get;set;}=new(){{"bakurani",new()},{"ozeti",new()}};
+    public Dictionary<string,MapSession> Maps{get;set;}=new(){{"bakurani",new()},{"ozeti",new()},{"zestafona",new()}};
     public Awaiting Waiting{get;private set;}
     public bool Paused{get;private set;}
     public MapSession Current=>Maps[Map];
@@ -172,7 +179,14 @@ public class Session
     public void ChangeMode(){Mode=(InputMode)(((int)Mode+1)%3);Waiting=Awaiting.None;Paused=false;Tell($"已切换：{ModeText}");}
     public void ChangeMap()
     {
-        Map=Map=="bakurani"?"ozeti":"bakurani";Waiting=Awaiting.None;
+        var index=Array.IndexOf(GameMaps.Ids,Map);
+        SelectMap(GameMaps.Ids[(index+1)%GameMaps.Ids.Length]);
+    }
+    public void SelectMap(string id)
+    {
+        if(!GameMaps.Valid(id))throw new ArgumentException("Unknown map",nameof(id));
+        if(Map==id)return;
+        Map=id;Waiting=Awaiting.None;
         Tell(Current.Origin!=null?"地图已切换 · 已恢复该地图位置":"地图已切换 · 请设置炮位/目标");
     }
     public void ChangeWeapon(){Weapon=Weapon=="mortar"?"spg":"mortar";Tell(Weapon=="mortar"?"已选择迫击炮":"已选择 SPH-2 · 请保持车体水平");}
