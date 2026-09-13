@@ -20,12 +20,16 @@ type client struct {
 }
 
 func connect(ctx context.Context, url, roomCode, uid, name, role string) (*client, error) {
+	return connectMap(ctx, url, roomCode, uid, name, role, "bakurani")
+}
+
+func connectMap(ctx context.Context, url, roomCode, uid, name, role, mapID string) (*client, error) {
 	conn, _, err := websocket.Dial(ctx, url, nil)
 	if err != nil {
 		return nil, err
 	}
 	c := &client{conn: conn, events: make(chan room.Event, 128), members: make(map[string]*room.Member)}
-	if err = c.send(ctx, room.Message{Type: "join", UID: uid, Room: roomCode, Callsign: name, Role: role, Weapon: "mortar", Map: "bakurani"}); err != nil {
+	if err = c.send(ctx, room.Message{Type: "join", UID: uid, Room: roomCode, Callsign: name, Role: role, Weapon: "mortar", Map: mapID}); err != nil {
 		return nil, err
 	}
 	go func() {
@@ -105,23 +109,25 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	url := os.Args[1]
-	protocolSmoke(ctx, url)
+	protocolSmoke(ctx, url, "bakurani", 80)
+	protocolSmoke(ctx, url, "zestafona", 80)
+	protocolSmoke(ctx, url, "futuremap2026", 1e12)
 	botSmoke(ctx, url)
 	fmt.Println("Remote protocol and test-room smoke tests passed.")
 }
 
-func protocolSmoke(ctx context.Context, url string) {
+func protocolSmoke(ctx context.Context, url, mapID string, coordinate float64) {
 	roomCode := "smoke-" + room.NewID()[:8]
 	uidA, uidB := room.NewID(), room.NewID()
-	a, err := connect(ctx, url, roomCode, uidA, "Same", "gunner")
+	a, err := connectMap(ctx, url, roomCode, uidA, "Same", "gunner", mapID)
 	check(err, "first public WSS join")
 	defer a.close()
-	b, err := connect(ctx, url, roomCode, uidB, "Same", "gunner")
+	b, err := connectMap(ctx, url, roomCode, uidB, "Same", "gunner", mapID)
 	check(err, "second public WSS join")
 	defer b.close()
 	_, err = b.wait(ctx, func(room.Event) bool { return b.members[uidB] != nil && b.members[uidB].DisplayName == "Same#2" })
 	check(err, "duplicate name suffix")
-	point := &room.Point{Map: "bakurani", X: 80, Y: 70}
+	point := &room.Point{Map: mapID, X: coordinate, Y: 70}
 	taskID := room.NewID()
 	check(a.send(ctx, room.Message{Type: "publish", TaskID: taskID, Point: point}), "publish write")
 	_, err = b.wait(ctx, func(room.Event) bool { return hasTask(b.members[uidA], taskID, "") })
@@ -131,7 +137,7 @@ func protocolSmoke(ctx context.Context, url string) {
 	// solving gunner's target and solved flag.
 	_, err = a.wait(ctx, func(room.Event) bool { return solving(a.members[uidB], point) })
 	check(err, "solve claim relayed to peers")
-	check(a.send(ctx, room.Message{Type: "profile", Callsign: "Renamed", Role: "gunner", Weapon: "spg", Map: "bakurani"}), "profile write")
+	check(a.send(ctx, room.Message{Type: "profile", Callsign: "Renamed", Role: "gunner", Weapon: "spg", Map: mapID}), "profile write")
 	_, err = b.wait(ctx, func(room.Event) bool { return b.members[uidA] != nil && b.members[uidA].Weapon == "spg" })
 	check(err, "weapon change relayed")
 	_, err = b.wait(ctx, func(e room.Event) bool {
@@ -145,7 +151,7 @@ func protocolSmoke(ctx context.Context, url string) {
 	if b.session != session {
 		panic("sync changed session")
 	}
-	fmt.Println("PASS sync preserves session")
+	fmt.Println("PASS", mapID, "sync preserves session")
 }
 
 func botSmoke(ctx context.Context, url string) {
