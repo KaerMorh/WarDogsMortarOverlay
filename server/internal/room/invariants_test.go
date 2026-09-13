@@ -2,6 +2,8 @@ package room
 
 import (
 	"encoding/json"
+	"math"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -29,13 +31,33 @@ func TestRoomIsolationAndNoopUpdates(t *testing.T) {
 		t.Fatal("unchanged data broadcast")
 	}
 }
-func TestZestafonaJoinAndPublish(t *testing.T) {
+func TestMapIdentifiersAreOpaque(t *testing.T) {
+	for _, id := range []string{"bakurani", "zestafona", "future-map_2030"} {
+		if !validMap(id) {
+			t.Fatalf("valid map ID rejected: %q", id)
+		}
+	}
+	for _, id := range []string{"", "../future", "Future", "has space", strings.Repeat("a", 65)} {
+		if validMap(id) {
+			t.Fatalf("unsafe map ID accepted: %q", id)
+		}
+	}
+	if !(&Point{Map: "future-map_2030", X: 500000, Y: -500000}).Valid() {
+		t.Fatal("future map point inside map-independent safety envelope rejected")
+	}
+	if (&Point{Map: "future-map_2030", X: 1000001}).Valid() || (&Point{Map: "future-map_2030", X: math.NaN()}).Valid() {
+		t.Fatal("unsafe coordinate accepted")
+	}
 	s := New(Config{})
-	member, err := s.Join(Message{V: Protocol, Type: "join", UID: NewID(), Room: "zest", Callsign: "Z", Role: "gunner", Weapon: "mortar", Map: "zestafona"}, &capture{})
+	member, err := s.Join(Message{V: Protocol, Type: "join", UID: NewID(), Room: "zest", Callsign: "Z", Role: "gunner", Weapon: "mortar", Map: "future-map_2030"}, &capture{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	apply(t, s, member, Message{Type: "publish", TaskID: NewID(), Point: &Point{Map: "zestafona", X: 80, Y: 70}})
+	apply(t, s, member, Message{Type: "profile", Callsign: "Z", Role: "gunner", Weapon: "mortar", Map: "another-map"})
+	point := &Point{Map: "future-map_2030", X: 500000, Y: -500000}
+	apply(t, s, member, Message{Type: "origin", Point: point})
+	apply(t, s, member, Message{Type: "target", Point: point, Solved: true})
+	apply(t, s, member, Message{Type: "publish", TaskID: NewID(), Point: point})
 }
 func TestCapacityAndTTLBoundary(t *testing.T) {
 	s := New(Config{MaxRooms: 1, MaxMembers: 1})

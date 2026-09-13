@@ -132,7 +132,9 @@ func clone(point *room.Point) *room.Point {
 func pointsEqual(a, b *room.Point) bool { return a == nil && b == nil || room.Same(a, b) }
 func offset(point *room.Point, amount float64) *room.Point {
 	result := &room.Point{Map: point.Map, X: point.X + amount, Y: point.Y + amount}
-	if !result.Valid() {
+	// Test bots mimic positions on the original game grid; unlike the relay,
+	// they must not publish a response outside that grid.
+	if !result.Valid() || result.X < -.03 || result.X > 163.81 || result.Y < -.01 || result.Y > 163.83 {
 		return nil
 	}
 	return result

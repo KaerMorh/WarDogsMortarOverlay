@@ -250,6 +250,7 @@ public sealed class RoomCoordinator
     }
     public bool Select(NetworkPoint point, string source)
     {
+        if (!GameMaps.Valid(point.Map)) { controller.Notify("本机未安装地图 " + point.Map + " · 无法解算该任务"); return false; }
         if (!point.Valid) { controller.Notify("任务坐标无效"); return false; }
         if (controller.State.Map != point.Map)
         {

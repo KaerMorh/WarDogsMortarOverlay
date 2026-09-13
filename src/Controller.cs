@@ -16,7 +16,7 @@ public record HistoryEntry(DateTime Time,string Message,PositionUpdate? Position
     public string Title=>Shared is {} shared?$"{Time:HH:mm:ss}  {shared.PublisherName} · 任务 {shared.Sequence} · {shared.Point.Coordinate}":Position==null?$"{Time:HH:mm:ss}  {Message}":$"{Time:HH:mm:ss}  {(Position.Role==Awaiting.Origin?"炮位":"目标")} · {Position.Coordinate}";
     public string Detail=>Position==null?"":$"{GameMaps.Name(Position.Map)} · {(Shared!=null?Shared.Status:(Position.Weapon=="mortar"?"迫击炮":"SPH-2"))} · {Position.Source}\n{Proximity}";
     public string FullText=>Title+(Detail.Length>0?"\n"+Detail:"");
-    public string Hint=>Position==null?Message:$"点击恢复{(Position.Role==Awaiting.Origin?"炮位（位置改变会清除当前目标）":"目标")}；不同地图将自动切换。\n{FullText}";
+    public string Hint=>Position==null?Message:!GameMaps.Valid(Position.Map)?$"本机未安装该地图，无法恢复或解算。\n{FullText}":$"点击恢复{(Position.Role==Awaiting.Origin?"炮位（位置改变会清除当前目标）":"目标")}；不同地图将自动切换。\n{FullText}";
 }
 public class Preferences
 {
@@ -115,7 +115,8 @@ public class Controller
     public void RecordRoomTask(RoomMember member,RoomTask task)
     {
         var shared=new SharedTaskHistory{RoomId=Rooms.State.RoomId,TaskId=task.Id,PublisherUid=member.Uid,Sequence=task.Sequence,Point=task.Point};shared.UpdateNames(Rooms.State);
-        AddHistory(new(task.CreatedAt.LocalDateTime,"",new(task.Point.Map,State.Weapon,Awaiting.Target,task.Point.Coordinate,"房间任务"),TowerProximity.Describe(task.Point.Coordinate,Towers[task.Point.Map]),shared));
+        var proximity=Towers.TryGetValue(task.Point.Map,out var towers)?TowerProximity.Describe(task.Point.Coordinate,towers):"本机未安装该地图 · 无法显示塔位";
+        AddHistory(new(task.CreatedAt.LocalDateTime,"",new(task.Point.Map,State.Weapon,Awaiting.Target,task.Point.Coordinate,"房间任务"),proximity,shared));
     }
     public void UpdateRoomHistory()
     {

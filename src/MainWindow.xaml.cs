@@ -180,6 +180,11 @@ public partial class MainWindow:Window
             await ExportVisuals(dir);log.Add("PASS native WPF and WebView captures exported");
             typeof(UpdateService).GetProperty(nameof(UpdateService.Available))!.SetValue(c.Updates,null);c.Refresh();
             Check(!HasBadge(SettingsNav.Content)&&!Buttons(c.Hud).Any(b=>HasBadge(b.Content)),"settings red dot clears when update is no longer available");
+            var unknownPoint=new WarDogs.Multiplayer.NetworkPoint("future-map",300,400);
+            var unknownMember=new WarDogs.Multiplayer.RoomMember{Uid="future-player",DisplayName="Future",Tasks=new(){new(){Id=Guid.NewGuid().ToString("D"),CreatedAt=DateTimeOffset.UtcNow,Point=unknownPoint}}};
+            c.Rooms.State.Apply(new WarDogs.Multiplayer.RoomEvent{V=WarDogs.Multiplayer.Protocol.Version,Type="snapshot",RoomId="unknown-map-check",Room="future",Revision=1,Members=new(){unknownMember}});
+            Check(c.History.Any(h=>h.Position?.Map=="future-map"&&h.Proximity.Contains("本机未安装该地图")&&h.Hint.Contains("无法恢复或解算")),"unknown remote map task is recorded without a local map file");
+            Check(!c.Rooms.Select(unknownPoint,"验证")&&c.Notices[0].Contains("本机未安装地图"),"unknown remote map cannot be selected for local solving");
             File.WriteAllLines(Path.Combine(dir,"integration.txt"),log);
             c.Notify("集成验证完成 · 演示数据，可直接拖动地图标记");
         }

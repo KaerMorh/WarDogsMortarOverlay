@@ -22,14 +22,16 @@ type Point struct {
 }
 
 func (p *Point) Valid() bool {
-	return p != nil && validMap(p.Map) && finite(p.X) && finite(p.Y) && p.X >= -.03 && p.X <= 163.81 && p.Y >= -.01 && p.Y <= 163.83
+	// Coordinates are opaque to the relay. Keep a generous, map-independent
+	// envelope so a new map never requires a server release.
+	return p != nil && validMap(p.Map) && finite(p.X) && finite(p.Y) && math.Abs(p.X) <= 1e6 && math.Abs(p.Y) <= 1e6
 }
 func finite(n float64) bool { return !math.IsNaN(n) && !math.IsInf(n, 0) }
 func Same(a, b *Point) bool {
 	return a != nil && b != nil && a.Map == b.Map && math.Round(a.X*1e6) == math.Round(b.X*1e6) && math.Round(a.Y*1e6) == math.Round(b.Y*1e6)
 }
 func Equal(a, b *Point) bool  { return a == nil && b == nil || a != nil && b != nil && *a == *b }
-func validMap(s string) bool  { return s == "bakurani" || s == "ozeti" || s == "zestafona" }
+func validMap(s string) bool  { return mapPattern.MatchString(s) }
 func validRole(s string) bool { return s == "gunner" || s == "scout" }
 
 // Weapon ids mirror the client's weapons.json. The server only gates the
@@ -38,6 +40,7 @@ func validWeapon(s string) bool { return s == "mortar" || s == "spg" }
 
 var uuidPattern = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 var roomPattern = regexp.MustCompile(`^[a-z0-9_-]{4,32}$`)
+var mapPattern = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,63}$`)
 
 func NewID() string {
 	var b [16]byte
