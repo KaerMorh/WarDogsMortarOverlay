@@ -1,0 +1,790 @@
+{
+  "observedBiasDegrees": [
+    8.041553363738029,
+    10.065473944404916,
+    -10.217669968580953,
+    -8.777609170774157
+  ],
+  "models": [
+    {
+      "model": "rigid tilt",
+      "radiansPerMil": 0.001,
+      "trainingImages": [
+        1,
+        2
+      ],
+      "parameters": [
+        0.02347376227378845,
+        -0.05048803925514223
+      ],
+      "predictedBiasDegrees": [
+        8.04155334379921,
+        10.065473904013635,
+        -11.151133340026126,
+        -10.105199413915917
+      ],
+      "residualDegrees": [
+        -1.993881778422775e-8,
+        -4.0391282427293134e-8,
+        -0.9334633714451717,
+        -1.3275902431417577
+      ],
+      "trainingRmsDegrees": 3.18513119883153e-8,
+      "heldOutRmsDegrees": 1.1475734659521755,
+      "heldOutTransverseMissMeters": [
+        {
+          "image": 3,
+          "miss": -19.651244848939854
+        },
+        {
+          "image": 4,
+          "miss": -29.408442745635927
+        }
+      ],
+      "equivalentTiltDegrees": 3.190124670945842
+    },
+    {
+      "model": "rigid tilt",
+      "radiansPerMil": 0.001,
+      "trainingImages": [
+        3,
+        4
+      ],
+      "parameters": [
+        0.007292801141738891,
+        -0.058397270441055284
+      ],
+      "predictedBiasDegrees": [
+        4.655368170156363,
+        7.318895993785293,
+        -10.217670024251982,
+        -8.77760921774726
+      ],
+      "residualDegrees": [
+        -3.3861851935816647,
+        -2.7465779506196237,
+        -5.5671029700277556e-8,
+        -4.6973103201785644e-8
+      ],
+      "trainingRmsDegrees": 5.150599951605051e-8,
+      "heldOutRmsDegrees": 3.083013185510369,
+      "heldOutTransverseMissMeters": [
+        {
+          "image": 1,
+          "miss": -65.89681591936447
+        },
+        {
+          "image": 2,
+          "miss": -52.16074712866063
+        }
+      ],
+      "equivalentTiltDegrees": 3.3719070770919677
+    },
+    {
+      "model": "rigid tilt",
+      "radiansPerMil": 0.001,
+      "trainingImages": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "parameters": [
+        0.027986268997192382,
+        -0.03905933380126956
+      ],
+      "predictedBiasDegrees": [
+        8.190521823991,
+        9.619199183426145,
+        -10.011864657896417,
+        -9.371777281529246
+      ],
+      "residualDegrees": [
+        0.14896846025297306,
+        -0.4462747609787724,
+        0.2058053106845351,
+        -0.5941681107550881
+      ],
+      "trainingRmsDegrees": 0.39266535821900267,
+      "heldOutRmsDegrees": null,
+      "heldOutTransverseMissMeters": [],
+      "equivalentTiltDegrees": 2.7530981624246302
+    },
+    {
+      "model": "rigid tilt",
+      "radiansPerMil": 0.0009817477042468104,
+      "trainingImages": [
+        1,
+        2
+      ],
+      "parameters": [
+        0.02528177499771117,
+        -0.05624856114387514
+      ],
+      "predictedBiasDegrees": [
+        8.041553379879518,
+        10.06547400089835,
+        -11.24240683608901,
+        -10.194186684820028
+      ],
+      "residualDegrees": [
+        1.6141489938934827e-8,
+        5.649343208537294e-8,
+        -1.0247368675080566,
+        -1.4165775140458685
+      ],
+      "trainingRmsDegrees": 4.154549052685128e-8,
+      "heldOutRmsDegrees": 1.2362802070992234,
+      "heldOutTransverseMissMeters": [
+        {
+          "image": 3,
+          "miss": -21.572536184394274
+        },
+        {
+          "image": 4,
+          "miss": -31.379277178445527
+        }
+      ],
+      "equivalentTiltDegrees": 3.533374921129118
+    },
+    {
+      "model": "rigid tilt",
+      "radiansPerMil": 0.0009817477042468104,
+      "trainingImages": [
+        3,
+        4
+      ],
+      "parameters": [
+        0.007185775041580197,
+        -0.06459652185440065
+      ],
+      "predictedBiasDegrees": [
+        4.523662845609719,
+        7.19685593429266,
+        -10.21766995718294,
+        -8.777609168932644
+      ],
+      "residualDegrees": [
+        -3.517890518128308,
+        -2.868618010112255,
+        1.139801386755482e-8,
+        1.8415157161299245e-9
+      ],
+      "trainingRmsDegrees": 8.164125803101196e-9,
+      "heldOutRmsDegrees": 3.209713615377348,
+      "heldOutTransverseMissMeters": [
+        {
+          "image": 1,
+          "miss": -68.45670465282683
+        },
+        {
+          "image": 2,
+          "miss": -54.476535813885846
+        }
+      ],
+      "equivalentTiltDegrees": 3.723937414748433
+    },
+    {
+      "model": "rigid tilt",
+      "radiansPerMil": 0.0009817477042468104,
+      "trainingImages": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "parameters": [
+        0.030688525438308713,
+        -0.04260475277900694
+      ],
+      "predictedBiasDegrees": [
+        8.205352194056202,
+        9.580832304996827,
+        -10.008081413149634,
+        -9.400819204504074
+      ],
+      "residualDegrees": [
+        0.16379883031817336,
+        -0.48464163940809085,
+        0.20958855543131868,
+        -0.6232100337299176
+      ],
+      "trainingRmsDegrees": 0.41654101964008167,
+      "heldOutRmsDegrees": null,
+      "heldOutTransverseMissMeters": [],
+      "equivalentTiltDegrees": 3.0084106737367695
+    },
+    {
+      "model": "shifted horizontal vector",
+      "trainingImages": [
+        1,
+        2
+      ],
+      "parameters": [
+        97.90951490402222,
+        -217.0764183998108
+      ],
+      "predictedBiasDegrees": [
+        8.041553318105999,
+        10.065473991172208,
+        -11.326091121164676,
+        -10.289087381435118
+      ],
+      "residualDegrees": [
+        -4.5632028681455916e-8,
+        4.676728950834814e-8,
+        -1.1084211525837246,
+        -1.51147821066096
+      ],
+      "trainingRmsDegrees": 4.620314604841788e-8,
+      "heldOutRmsDegrees": 1.3253610513361802,
+      "heldOutTransverseMissMeters": [
+        {
+          "image": 3,
+          "miss": -23.334027951030514
+        },
+        {
+          "image": 4,
+          "miss": -33.48099494558623
+        }
+      ]
+    },
+    {
+      "model": "shifted horizontal vector",
+      "trainingImages": [
+        3,
+        4
+      ],
+      "parameters": [
+        25.528292655944824,
+        -248.51012229919434
+      ],
+      "predictedBiasDegrees": [
+        4.35708071883209,
+        7.015959506047616,
+        -10.217669966034295,
+        -8.777609167403178
+      ],
+      "residualDegrees": [
+        -3.6844726449059393,
+        -3.0495144383573,
+        2.546657411229112e-9,
+        3.3709808513521005e-9
+      ],
+      "trainingRmsDegrees": 2.9873881460525595e-9,
+      "heldOutRmsDegrees": 3.3819282207647317,
+      "heldOutTransverseMissMeters": [
+        {
+          "image": 1,
+          "miss": -71.69395607595003
+        },
+        {
+          "image": 2,
+          "miss": -57.90870418443344
+        }
+      ]
+    },
+    {
+      "model": "shifted horizontal vector",
+      "trainingImages": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "parameters": [
+        119.62509870529175,
+        -161.62519931793213
+      ],
+      "predictedBiasDegrees": [
+        8.218513772855795,
+        9.565878415219462,
+        -9.989399179208155,
+        -9.418343054368567
+      ],
+      "residualDegrees": [
+        0.17696040911776773,
+        -0.4995955291854547,
+        0.228270789372798,
+        -0.6407338835944084
+      ],
+      "trainingRmsDegrees": 0.4311490873364095,
+      "heldOutRmsDegrees": null,
+      "heldOutTransverseMissMeters": []
+    }
+  ],
+  "constantYaw": {
+    "biasDegrees": -0.22206295780304108,
+    "rmsDegrees": 9.317058290309868
+  },
+  "newShots": [
+    {
+      "commandDegrees": 90,
+      "impactVectorMeters": [
+        1348.0000000000005,
+        -152.9999999999987
+      ],
+      "rangeMeters": 1356.6550777555806,
+      "observedBiasDegrees": 6.475444047052761
+    },
+    {
+      "commandDegrees": 270,
+      "impactVectorMeters": [
+        -1106.0000000000002,
+        -126.9999999999996
+      ],
+      "rangeMeters": 1113.267712636992,
+      "observedBiasDegrees": -6.550481828529259
+    }
+  ],
+  "frozenPredictions": [
+    {
+      "model": "rigid tilt",
+      "radiansPerMil": 0.001,
+      "parameters": [
+        0.027986268997192382,
+        -0.03905933380126956
+      ],
+      "predictions": [
+        {
+          "biasDegrees": 7.2555968492770875,
+          "residualDegrees": 0.7801528022243283,
+          "transverseResidualMeters": 18.471963642461674
+        },
+        {
+          "biasDegrees": -8.926988095050765,
+          "residualDegrees": -2.376506266521506,
+          "transverseResidualMeters": -46.162722117352615
+        }
+      ]
+    },
+    {
+      "model": "rigid tilt",
+      "radiansPerMil": 0.0009817477042468104,
+      "parameters": [
+        0.030688525438308713,
+        -0.04260475277900694
+      ],
+      "predictions": [
+        {
+          "biasDegrees": 7.235177584534686,
+          "residualDegrees": 0.7597335374819266,
+          "transverseResidualMeters": 17.988517948820643
+        },
+        {
+          "biasDegrees": -8.921846944703313,
+          "residualDegrees": -2.371365116174055,
+          "transverseResidualMeters": -46.0629143355072
+        }
+      ]
+    },
+    {
+      "model": "shifted horizontal vector",
+      "parameters": [
+        119.62509870529175,
+        -161.62519931793213
+      ],
+      "predictions": [
+        {
+          "biasDegrees": 7.170993449348557,
+          "residualDegrees": 0.6955494022957952,
+          "transverseResidualMeters": 16.468882344610492
+        },
+        {
+          "biasDegrees": -8.788899132364355,
+          "residualDegrees": -2.2384173038350945,
+          "transverseResidualMeters": -43.481803952607244
+        }
+      ]
+    }
+  ],
+  "oppositeShotMidpointMeters": [
+    121.00000000000011,
+    -139.99999999999915
+  ],
+  "refits": [
+    {
+      "model": "rigid tilt",
+      "radiansPerMil": 0.001,
+      "trainingImages": [
+        5,
+        6
+      ],
+      "parameters": [
+        0.001553497314453125,
+        -0.031698199510574336
+      ],
+      "predictedBiasDegrees": [
+        1.7001865536213916,
+        3.0190232833850663,
+        -5.522360278618886,
+        -4.712625934116274,
+        6.475443967227008,
+        -6.550481757756752
+      ],
+      "residualDegrees": [
+        -6.341366810116636,
+        -7.0464506610198505,
+        4.695309689962066,
+        4.064983236657884,
+        -7.982575222865223e-8,
+        7.077250688336595e-8
+      ],
+      "trainingRmsDegrees": 7.543506628029916e-8,
+      "heldOutRmsDegrees": 5.666467632873173,
+      "heldOutTransverseMissMeters": [
+        {
+          "image": 1,
+          "miss": -123.22602301472642
+        },
+        {
+          "image": 2,
+          "miss": -133.5344419281556
+        },
+        {
+          "image": 3,
+          "miss": 98.73929962035392
+        },
+        {
+          "image": 4,
+          "miss": 89.97900721830094
+        }
+      ],
+      "equivalentTiltDegrees": 1.818352859460472
+    },
+    {
+      "model": "rigid tilt",
+      "radiansPerMil": 0.001,
+      "trainingImages": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "parameters": [
+        0.03205038428306579,
+        -0.03200905561447144
+      ],
+      "predictedBiasDegrees": [
+        8.551808899013388,
+        9.627089519262888,
+        -9.437741596769635,
+        -9.082947687591284,
+        5.876321014672037,
+        -7.460650510311609
+      ],
+      "residualDegrees": [
+        0.5102555352753592,
+        -0.4383844251420294,
+        0.779928371811318,
+        -0.3053385168171283,
+        -0.5991230323807247,
+        -0.91016868178235
+      ],
+      "trainingRmsDegrees": 0.6246888462428161,
+      "heldOutRmsDegrees": null,
+      "heldOutTransverseMissMeters": [],
+      "equivalentTiltDegrees": 2.5953196925924606
+    },
+    {
+      "model": "rigid tilt",
+      "radiansPerMil": 0.0009817477042468104,
+      "trainingImages": [
+        5,
+        6
+      ],
+      "parameters": [
+        0.0016854035854339596,
+        -0.03463730216026305
+      ],
+      "predictedBiasDegrees": [
+        1.69719222929319,
+        3.0005410368052043,
+        -5.515386699827408,
+        -4.7206608711876665,
+        6.475443954268679,
+        -6.550481756931665
+      ],
+      "residualDegrees": [
+        -6.344361134444837,
+        -7.064932907599713,
+        4.702283268753545,
+        4.056948299586491,
+        -9.278408261183942e-8,
+        7.159759365661249e-8
+      ],
+      "trainingRmsDegrees": 8.287068662542274e-8,
+      "heldOutRmsDegrees": 5.67306118066465,
+      "heldOutTransverseMissMeters": [
+        {
+          "image": 1,
+          "miss": -123.28397105364483
+        },
+        {
+          "image": 2,
+          "miss": -133.8829169429787
+        },
+        {
+          "image": 3,
+          "miss": 98.88562027480266
+        },
+        {
+          "image": 4,
+          "miss": 89.80145032152326
+        }
+      ],
+      "equivalentTiltDegrees": 1.9869192354781784
+    },
+    {
+      "model": "rigid tilt",
+      "radiansPerMil": 0.0009817477042468104,
+      "trainingImages": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "parameters": [
+        0.03509708404541016,
+        -0.034948158264160145
+      ],
+      "predictedBiasDegrees": [
+        8.560969403702327,
+        9.58692096090776,
+        -9.438837486994172,
+        -9.11503694222867,
+        5.865454038140135,
+        -7.463619362026577
+      ],
+      "residualDegrees": [
+        0.5194160399642987,
+        -0.47855298349715686,
+        0.7788324815867809,
+        -0.33742777145451297,
+        -0.6099900089126256,
+        -0.9131375334973179
+      ],
+      "trainingRmsDegrees": 0.6357608934660364,
+      "heldOutRmsDegrees": null,
+      "heldOutTransverseMissMeters": [],
+      "equivalentTiltDegrees": 2.837835767559504
+    },
+    {
+      "model": "shifted horizontal vector",
+      "trainingImages": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "parameters": [
+        135.34191250801086,
+        -134.28221940994263
+      ],
+      "predictedBiasDegrees": [
+        8.55591491537112,
+        9.581904736797952,
+        -9.447671482146491,
+        -9.140173971215743,
+        5.8958563202612115,
+        -7.430258448232122
+      ],
+      "residualDegrees": [
+        0.5143615516330934,
+        -0.483569207606965,
+        0.7699984864344607,
+        -0.36256480044158523,
+        -0.5795877267915502,
+        -0.8797766197028627
+      ],
+      "trainingRmsDegrees": 0.62352315134749,
+      "heldOutRmsDegrees": null,
+      "heldOutTransverseMissMeters": []
+    }
+  ],
+  "future1000Mil": [
+    {
+      "model": "rigid tilt",
+      "radiansPerMil": 0.001,
+      "predictions": [
+        {
+          "commandDegrees": 90,
+          "predictedWorldBearingDegrees": 92.69092954919398
+        },
+        {
+          "commandDegrees": 270,
+          "predictedWorldBearingDegrees": 266.9650309018799
+        }
+      ]
+    },
+    {
+      "model": "rigid tilt",
+      "radiansPerMil": 0.0009817477042468104,
+      "predictions": [
+        {
+          "commandDegrees": 90,
+          "predictedWorldBearingDegrees": 92.81212309535567
+        },
+        {
+          "commandDegrees": 270,
+          "predictedWorldBearingDegrees": 266.8026161181549
+        }
+      ]
+    },
+    {
+      "model": "shifted horizontal vector",
+      "predictions": [
+        {
+          "commandDegrees": 90,
+          "predictedWorldBearingDegrees": 93.3671314486869
+        },
+        {
+          "commandDegrees": 270,
+          "predictedWorldBearingDegrees": 266.18105705547254
+        }
+      ]
+    }
+  ],
+  "movedParkingState": {
+    "origin": [
+      97.06,
+      109.11
+    ],
+    "shots": [
+      {
+        "time": "05:47:13",
+        "target": [
+          100.03,
+          120.91
+        ],
+        "impact": [
+          99.59,
+          122.69
+        ],
+        "mil": 1287,
+        "nominalBearingDegrees": 14.12760600482349,
+        "actualBearingDegrees": 10.55340857345988,
+        "observedBiasDegrees": -3.5741974313636105,
+        "targetDistanceMeters": 1216.802777774607,
+        "impactDistanceMeters": 1381.3663525654588,
+        "errorVectorMeters": [
+          -43.99999999999977,
+          178
+        ],
+        "ifOldParametersPersisted": [
+          {
+            "model": "rigid tilt",
+            "radiansPerMil": 0.001,
+            "predictedBiasDegrees": 8.270680762400412,
+            "residualDegrees": 11.844878193764025
+          },
+          {
+            "model": "rigid tilt",
+            "radiansPerMil": 0.0009817477042468104,
+            "predictedBiasDegrees": 8.325453290406164,
+            "residualDegrees": 11.899650721769776
+          },
+          {
+            "model": "shifted horizontal vector",
+            "predictedBiasDegrees": 8.334569109873158,
+            "residualDegrees": 11.908766541236767
+          }
+        ]
+      },
+      {
+        "time": "05:48:55",
+        "target": [
+          101.71,
+          119.96
+        ],
+        "impact": [
+          101.51,
+          122.02
+        ],
+        "mil": 1296,
+        "nominalBearingDegrees": 23.19859051364816,
+        "actualBearingDegrees": 19.01876703696699,
+        "observedBiasDegrees": -4.179823476681167,
+        "targetDistanceMeters": 1180.444831408905,
+        "impactDistanceMeters": 1365.5423830844645,
+        "errorVectorMeters": [
+          -19.999999999998863,
+          206
+        ],
+        "ifOldParametersPersisted": [
+          {
+            "model": "rigid tilt",
+            "radiansPerMil": 0.001,
+            "predictedBiasDegrees": 9.03490630414039,
+            "residualDegrees": 13.214729780821559
+          },
+          {
+            "model": "rigid tilt",
+            "radiansPerMil": 0.0009817477042468104,
+            "predictedBiasDegrees": 9.061095078197695,
+            "residualDegrees": 13.240918554878865
+          },
+          {
+            "model": "shifted horizontal vector",
+            "predictedBiasDegrees": 9.072253338073548,
+            "residualDegrees": 13.252076814754716
+          }
+        ]
+      }
+    ],
+    "descriptiveFits": [
+      {
+        "radiansPerMil": 0.001,
+        "trainingImages": [
+          1,
+          2
+        ],
+        "parameters": [
+          -0.014735432863235476,
+          0.02043009042739867
+        ],
+        "predictedBiasDegrees": [
+          -3.574197188703071,
+          -4.179823646498737
+        ],
+        "residualDegrees": [
+          2.426605402833369e-7,
+          -1.6981756863565057e-7
+        ],
+        "trainingRmsDegrees": 2.094303517018544e-7,
+        "heldOutRmsDegrees": null,
+        "heldOutTransverseMissMeters": [],
+        "equivalentTiltDegrees": 1.443264168709388
+      },
+      {
+        "radiansPerMil": 0.0009817477042468104,
+        "trainingImages": [
+          1,
+          2
+        ],
+        "parameters": [
+          -0.01596173882484437,
+          0.022664035558700505
+        ],
+        "predictedBiasDegrees": [
+          -3.574197276863476,
+          -4.179823568721586
+        ],
+        "residualDegrees": [
+          1.5450013497024548e-7,
+          -9.204041803843835e-8
+        ],
+        "trainingRmsDegrees": 1.2716471652646924e-7,
+        "heldOutRmsDegrees": null,
+        "heldOutTransverseMissMeters": [],
+        "equivalentTiltDegrees": 1.5882774674481992
+      }
+    ]
+  }
+}

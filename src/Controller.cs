@@ -21,6 +21,7 @@ public record HistoryEntry(DateTime Time,string Message,PositionUpdate? Position
 public class Preferences
 {
     public MultiplayerPreferences Multiplayer{get;set;}=new();
+    public PzhCalibrationSettings Pzh{get;set;}=new();
     public bool AutoCheckUpdates{get;set;}=true;
     public bool EnableTestFeatures{get;set;}
     public Session Session{get;set;}=new();
@@ -48,6 +49,13 @@ public class Controller
     public UpdateService Updates{get;}
     public RoomCoordinator Rooms{get;}
     public TaskPickerWindow? TaskPicker{get;private set;}
+    public PzhCalibrationWindow? PzhCalibrationWindow{get;private set;}
+    public void ShowPzhCalibration()
+    {
+        if(PzhCalibrationWindow!=null){PzhCalibrationWindow.Show();PzhCalibrationWindow.Activate();return;}
+        var window=new PzhCalibrationWindow(this);PzhCalibrationWindow=window;window.Show();
+    }
+    public void CalibrationWindowClosed(PzhCalibrationWindow window){if(ReferenceEquals(PzhCalibrationWindow,window))PzhCalibrationWindow=null;}
     public void ShowRoomTasks()
     {
         if(TaskPicker!=null){TaskPicker.Show();return;}
@@ -75,6 +83,8 @@ public class Controller
         }
     }
     int requestRevision=0;uint lastSequence;bool closing;
+    Action<Coord>? pzhCoordinateCapture;
+    public bool PzhCoordinateCaptureWaiting=>pzhCoordinateCapture!=null;
     public bool IsClosing=>closing;
     public bool IsRecordingHotkey{get;set;}
     public event Action<string>? HotkeyRecorded;
@@ -84,6 +94,7 @@ public class Controller
         Demo=demo;Pref=new();Updates=new UpdateService(this);Updates.Changed+=()=>Updated?.Invoke();
         if(!demo)try{var path=Path.Combine(UserDir,"settings.json");if(File.Exists(path))Pref=JsonSerializer.Deserialize<Preferences>(File.ReadAllText(path),Json)??new();}catch{Notices.Add("设置读取失败 · 使用默认值");}
         Pref.Multiplayer??=new();
+        Pref.Pzh??=new();Pref.Pzh.Shots??=[];
         if(Pref.Multiplayer.Role is not ("gunner" or "scout"))Pref.Multiplayer.Role="gunner";
         foreach(var (action,key) in new[]{("publishTask","Ctrl+Alt+3"),("roomTasks","Ctrl+Alt+T"),("roomPrevious","Ctrl+Alt+Up"),("roomNext","Ctrl+Alt+Down"),("roomConfirm","Ctrl+Alt+Enter"),("roomCancel","Ctrl+Alt+Escape")})Pref.Keys.TryAdd(action,key);
         State=Pref.Session;
@@ -98,7 +109,15 @@ public class Controller
             Towers[id]=doc.RootElement.GetProperty("markers").EnumerateArray().Where(x=>x.GetProperty("icon").GetString()=="tower")
                 .Select(x=>new TowerInfo(x.GetProperty("label").GetString()!,new(x.GetProperty("x").GetDouble()/100,x.GetProperty("y").GetDouble()/100))).ToArray();
         }
-        State.Notice+=Notify;State.Changed+=Refresh;State.PositionUpdated+=p=>{if(Dragging&&p.Source=="地图")dragUpdate=p;else RecordPosition(p);};
+        State.Notice+=Notify;State.Changed+=Refresh;State.PositionUpdated+=p=>
+        {
+            if(p.Role==Awaiting.Origin&&Pref.Pzh.Origin!=null&&(Pref.Pzh.Map!=p.Map||Pref.Pzh.Origin!=p.Coordinate))
+            {
+                var warn=!Pref.Pzh.NeedsReset&&Pref.Pzh.Tilt!=null;Pref.Pzh.NeedsReset=true;
+                if(warn)Notify("PZH校准数据已保留 · 新炮位需要重置校准");
+            }
+            if(Dragging&&p.Source=="地图")dragUpdate=p;else RecordPosition(p);
+        };
         saveTimer.Tick+=(s,e)=>{saveTimer.Stop();Save();};
         Rooms=new RoomCoordinator(this);
         Rooms.Changed+=()=>Updated?.Invoke();
@@ -106,6 +125,23 @@ public class Controller
         Notify(demo?"演示数据 · 未监听剪贴板，正式启动即可使用":"已就绪 · 设置炮位开始使用");
     }
     public Solution? Result=>State.Current.Origin is {} o&&State.Current.Target is {} t?Calculator.Solve(o,t,State.Weapon):null;
+    public bool PzhCalibrationMatchesCurrent=>!Pref.Pzh.NeedsReset&&Pref.Pzh.Origin is {} saved&&State.Current.Origin is {} current&&Pref.Pzh.Map==State.Map&&saved==current;
+    public PzhDisplaySolution? PzhDisplay
+    {
+        get
+        {
+            var raw=Result;if(raw==null)return null;
+            if(State.Weapon!="spg")return new(raw,null,false,"");
+            if(Pref.Pzh.Tilt==null)return new(raw,null,false,"尚未校准");
+            if(!PzhCalibrationMatchesCurrent)return new(raw,null,false,"需重置校准");
+            if(!Pref.Pzh.Enabled)return new(raw,null,false,"校准已关闭");
+            if(raw.Azimuth is not {} azimuth||raw.High==null)return new(raw,null,false,"无高抛解");
+            var corrected=PzhTiltCompensation.Correct(azimuth,(raw.High.Min+raw.High.Max)/2,Pref.Pzh.Tilt);
+            if(corrected==null||corrected.Mil<20||corrected.Mil>1390)return new(raw,null,false,"补偿后超出范围");
+            return new(raw,corrected,true,"校准开启");
+        }
+    }
+    public string PzhCalibrationLabel=>Pref.Pzh.Tilt==null?"尚未校准":!PzhCalibrationMatchesCurrent?"需重置校准":Pref.Pzh.Enabled?"重新校准":"校准已关闭";
     public void Notify(string message)
     {
         if(History.Count==0||History[0].Position!=null||History[0].Message!=message)AddHistory(new(DateTime.Now,message));
@@ -161,7 +197,7 @@ public class Controller
         requestRevision++;
         if(!Pref.EnableTestFeatures&&action is "publishTask" or "roomTasks" or "roomPrevious" or "roomNext" or "roomConfirm" or "roomCancel")
         {Notify("请先在设置第一页开启测试功能");return;}
-        if(action is "origin" or "target" or "pause" or "map" or "mode")Rooms.Capture.Cancel();
+        if(action is "origin" or "target" or "pause" or "map" or "mode"){Rooms.Capture.Cancel();CancelPzhCoordinateCapture(false);}
         switch(action)
         {
             case "publishTask":Rooms.TogglePublish(GetClipboardSequenceNumber());break;
@@ -195,9 +231,25 @@ public class Controller
         }
         Notify("剪贴板正忙 · 本次未读取");return(revision==requestRevision,null);
     }
+    public async Task<Coord?> ReadCoordinateClipboardAsync()
+    {
+        Rooms.Capture.Cancel();var revision=++requestRevision;var result=await ReadClipboard(revision);return result.Current?result.Coord:null;
+    }
+    public async void CapturePzhCoordinate(Action<Coord> receive)
+    {
+        Rooms.Capture.Cancel();pzhCoordinateCapture=null;var revision=++requestRevision;var result=await ReadClipboard(revision);if(!result.Current)return;
+        if(result.Coord is {} coordinate){receive(coordinate);return;}
+        pzhCoordinateCapture=receive;Notify("PZH校准 · 等待下一次有效落点坐标");
+    }
+    public void CancelPzhCoordinateCapture(bool refresh=true){pzhCoordinateCapture=null;if(refresh)Refresh();}
     async void ClipboardChanged()
     {
         var seq=GetClipboardSequenceNumber();if(seq==lastSequence)return;lastSequence=seq;
+        if(pzhCoordinateCapture is {} capture)
+        {
+            var captureRevision=++requestRevision;var copied=await ReadClipboard(captureRevision);if(!copied.Current)return;
+            if(copied.Coord is {} coordinate){pzhCoordinateCapture=null;capture(coordinate);}return;
+        }
         if(Rooms.Capture.Waiting)
         {
             int publishRevision=++requestRevision;var copied=await ReadClipboard(publishRevision);
@@ -251,7 +303,7 @@ public class Controller
         if(origin)State.SetOrigin(c,"地图");else State.SetTarget(c,"地图",true);
     }
     public void ShowMap(){Main.ShowMapPage(this,new RoutedEventArgs());Main.Show();Main.WindowState=WindowState.Normal;Main.Activate();}
-    public async void Quit(){if(closing)return;closing=true;Save();TaskPicker?.Close();await Rooms.ShutdownAsync();RemoveClipboardFormatListener(handle);foreach(var id in hotkeys.Keys)UnregisterHotKey(handle,id);source?.RemoveHook(WndProc);Application.Current.Shutdown();}
+    public async void Quit(){if(closing)return;PzhCalibrationWindow?.Close();if(PzhCalibrationWindow!=null)return;closing=true;Save();TaskPicker?.Close();await Rooms.ShutdownAsync();RemoveClipboardFormatListener(handle);foreach(var id in hotkeys.Keys)UnregisterHotKey(handle,id);source?.RemoveHook(WndProc);Application.Current.Shutdown();}
     [DllImport("user32.dll")]static extern bool AddClipboardFormatListener(IntPtr h);
     [DllImport("user32.dll")]static extern bool RemoveClipboardFormatListener(IntPtr h);
     [DllImport("user32.dll")]static extern uint GetClipboardSequenceNumber();

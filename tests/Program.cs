@@ -18,6 +18,15 @@ var max=b.Solve(new(0,0),new(0,26.29),"spg");Check(max.Low!.ToString()=="600"&&m
 var min=b.Solve(new(0,0),new(0,7.8),"spg");Check(min.Low==null&&min.High!.ToString()=="1390","high only");
 foreach(var p in new[]{(new Coord(0,1),0d),(new Coord(1,0),90d),(new Coord(0,-1),180d),(new Coord(-1,0),270d)})Check(b.Solve(new(0,0),p.Item1,"mortar").Azimuth==p.Item2,"compass");
 Check(b.Solve(new(1,1),new(1,1),"mortar").Azimuth==null,"coincident");
+var pzhOrigin=new Coord(97.97,109.57);
+var pzhShots=new List<PzhShot>{
+    new(10.3,1303,new(101.48,120.16)),new(19.8,1315,new(103.39,119.01)),
+    new(239.6,1302,new(88.82,101.71)),new(229.9,1292,new(89.62,100.01)),
+    new(90,1300,new(111.45,108.04)),new(270,1300,new(86.91,108.30))};
+var tilt=PzhTiltCompensation.Fit(pzhOrigin,pzhShots);Check(tilt!=null&&tilt.MagnitudeDegrees>2.4&&tilt.MagnitudeDegrees<2.8&&tilt.RmsDegrees<.8,"PZH six-shot tilt fit");
+var pzhCorrected=PzhTiltCompensation.Correct(19.8,1315,tilt!);Check(pzhCorrected!=null&&double.IsFinite(pzhCorrected.Azimuth)&&double.IsFinite(pzhCorrected.Mil),"PZH inverse correction finite");
+Check(PzhTiltCompensation.Fit(pzhOrigin,pzhShots.Take(1).ToArray())==null,"PZH needs two shots");
+var zero=PzhTiltCompensation.Correct(359.9,1300,new(0,0,0));Check(zero!=null&&Math.Abs(zero.Azimuth-359.9)<1e-9&&Math.Abs(zero.Mil-1300)<1e-9,"PZH zero tilt preserves solution");
 foreach(var w in b.Weapons.Values)foreach(var table in w.Ballistics.Values)foreach(var point in table){var m=Ballistics.Interpolate(table,point[0]);Check(m!=null&&m.Min<=point[1]&&m.Max>=point[1],"every node");}
 var s=new Session();var o=new Coord(80,70);var t=new Coord(81,70);s.OriginAction(o);Check(s.Current.Origin==o&&s.Waiting==Awaiting.None,"smart direct origin");
 s.OriginAction(o);Check(s.Waiting==Awaiting.Origin,"same origin waits");s.OnClipboard(o);Check(s.Waiting==Awaiting.Origin,"same clipboard remains waiting");s.OriginAction(null);Check(s.Waiting==Awaiting.None,"origin cancels");

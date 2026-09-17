@@ -10,7 +10,7 @@ namespace WarDogs;
 public partial class HudWindow:Window
 {
     readonly Controller c;public string Form{get;private set;}="panel";string backForm="panel";
-    TextBlock? distance,mil,azimuth,status,notice,positions;Button? mode,map,weapon,pause,origin,target,latest;Border? shell;
+    TextBlock? distance,mil,azimuth,status,notice,positions;Button? mode,map,weapon,pause,origin,target,latest,calibrationButton;Border? shell;
     Expander? history;TextBlock? hiddenKey;Button? settingsButton;
     System.Windows.Shapes.Ellipse? bubbleDot; TextBlock? originReadout,targetReadout,bubbleReadout;Border? originBack,targetBack,quickInputBack;TextBox? quickInput;Button? quickConfirm;
     readonly List<(SolidColorBrush Brush,bool Button)> backgrounds=new();
@@ -19,6 +19,7 @@ public partial class HudWindow:Window
     bool quickOrigin;
     Point? dragStart;double startLeft,startTop;bool moved;
     static Brush Brush(string hex)=>(Brush)new BrushConverter().ConvertFromString(hex)!;
+    static string RoundMil(double value)=>Math.Floor(value+.5).ToString("0",System.Globalization.CultureInfo.InvariantCulture);
     public HudWindow(Controller control)
     {
         c=control;InitializeComponent();c.Updated+=Render;Surface.ContextMenuOpening+=(s,e)=>{Surface.ContextMenu=BubbleMenu();};
@@ -57,7 +58,7 @@ public partial class HudWindow:Window
     public void SetForm(string form)
     {
         if(form=="settings"&&Form!="settings")backForm=Form;
-        Form=form;distance=mil=azimuth=status=notice=positions=hiddenKey=null;mode=map=weapon=pause=origin=target=latest=settingsButton=null;history=null;shell=null;
+        Form=form;distance=mil=azimuth=status=notice=positions=hiddenKey=null;mode=map=weapon=pause=origin=target=latest=settingsButton=calibrationButton=null;history=null;shell=null;
         bubbleDot=null;originReadout=targetReadout=bubbleReadout=null;originBack=targetBack=quickInputBack=null;quickInput=null;quickConfirm=null;backgrounds.Clear();Surface.ContextMenu=null;
         c.IsRecordingHotkey=false;Surface.Children.Clear();Surface.LayoutTransform=new ScaleTransform(Math.Clamp(c.Pref.HudScale,.75,1.5),Math.Clamp(c.Pref.HudScale,.75,1.5));Opacity=1;
         if(form=="bubble")BuildBubble();else if(form=="compact")BuildCompact();else if(form=="settings")BuildSettings();else BuildPanel();
@@ -97,10 +98,16 @@ public partial class HudWindow:Window
         var row=new UniformGrid{Columns=3,Margin=new Thickness(0,0,0,6)};origin=Btn("",()=>c.Act("origin"),doubleAction:()=>OpenCoordinateInput(true));target=Btn("",()=>c.Act("target"),primary:true,doubleAction:()=>OpenCoordinateInput(false));pause=Btn("",()=>c.Act("pause"));pause.Margin=new Thickness(0);
         row.Children.Add(origin);row.Children.Add(target);row.Children.Add(pause);parent.Children.Add(row);
     }
+    void StatusLine(Panel parent,bool compact=false)
+    {
+        var grid=new Grid();grid.ColumnDefinitions.Add(new(){Width=new GridLength(1,GridUnitType.Star)});grid.ColumnDefinitions.Add(new(){Width=GridLength.Auto});
+        status=Text("",compact?10:11,blue);status.TextTrimming=TextTrimming.CharacterEllipsis;grid.Children.Add(status);
+        calibrationButton=Btn("尚未校准",()=>c.ShowPzhCalibration(),"打开PZH倾斜校准",tiny:true);calibrationButton.Margin=new Thickness(6,0,0,0);Grid.SetColumn(calibrationButton,1);grid.Children.Add(calibrationButton);parent.Children.Add(Back(grid));
+    }
     void BuildPanel()
     {
         var p=Card(348);p.Children.Add(Header(false));Selectors(p);Metrics(p,false);CoordinateLine(p);Actions(p);
-        status=Text("",11,blue);status.TextTrimming=TextTrimming.CharacterEllipsis;p.Children.Add(Back(status));
+        StatusLine(p);
         notice=Text("",10,muted);notice.TextWrapping=TextWrapping.Wrap;
         latest=Btn("",()=>{if(c.History.FirstOrDefault() is {} h)c.RestoreHistory(h);});latest.Content=notice;latest.Margin=new Thickness(0,5,0,0);latest.HorizontalContentAlignment=HorizontalAlignment.Left;p.Children.Add(latest);
         history=new Expander{Header="展开本次记录 ▾",FontSize=11,Foreground=ink,Background=Brush("#F0141923"),Margin=new Thickness(0,4,0,0),Content=new HistoryPanel(c){Height=230}};
@@ -114,7 +121,7 @@ public partial class HudWindow:Window
         origin=Btn("",()=>c.Act("origin"),tiny:true,doubleAction:()=>OpenCoordinateInput(true));target=Btn("",()=>c.Act("target"),primary:true,tiny:true,doubleAction:()=>OpenCoordinateInput(false));pause=Btn("",()=>c.Act("pause"),tiny:true);
         weapon=Btn("",()=>c.Act("weapon"),"切换迫击炮 / SPH-2",tiny:true);map=Btn("",()=>c.Act("map"),tiny:true);mode=Btn("",()=>c.Act("mode"),tiny:true);
         foreach(var button in new[]{origin,target,pause,weapon,map,mode}){button.Padding=new Thickness(2,4,2,4);button.Margin=new Thickness(0,0,3,0);row.Children.Add(button);}mode.Margin=new Thickness(0);p.Children.Add(row);
-        status=Text("",10,blue);status.TextTrimming=TextTrimming.CharacterEllipsis;p.Children.Add(Back(status));
+        StatusLine(p,true);
         p.ToolTip="按住数字拖动 · 蓝色就绪 / 橙色等待 / 灰色暂停";
     }
     void BuildBubble()
@@ -192,11 +199,12 @@ public partial class HudWindow:Window
     void Render()
     {
         if(settingsButton!=null)settingsButton.Content=UpdatePanel.Badge("设置",c.Updates.HasUpdate);
-        var s=c.State;var r=c.Result;var color=s.Paused?muted:s.Waiting!=Awaiting.None||r is {InRange:false}?amber:blue;
-        if(distance!=null)distance.Text=r?.Distance.ToString("0")??"—";if(azimuth!=null)azimuth.Text=r?.Azimuth?.ToString("0.0")??"—";
-        if(mil!=null){mil.Text=r==null?"—":s.Weapon=="mortar"?r.Single?.ToString()??"—":$"{r.Low?.ToString()??"—"}/{r.High?.ToString()??"—"}";mil.FontSize=s.Weapon=="mortar"?(Form=="compact"?27:30):17;mil.Foreground=r is {InRange:false}?amber:blue;mil.ToolTip=s.Weapon=="spg"?"低抛 / 高抛":"迫击炮仰角";}
+        var s=c.State;var r=c.Result;var display=c.PzhDisplay;var corrected=display?.Active==true?display.Corrected:null;var color=s.Paused?muted:s.Waiting!=Awaiting.None||r is {InRange:false}?amber:blue;
+        if(distance!=null)distance.Text=r?.Distance.ToString("0")??"—";if(azimuth!=null)azimuth.Text=corrected?.Azimuth.ToString("0.0")??r?.Azimuth?.ToString("0.0")??"—";
+        if(mil!=null){mil.Text=r==null?"—":s.Weapon=="mortar"?r.Single?.ToString()??"—":corrected!=null?RoundMil(corrected.Mil):$"{r.Low?.ToString()??"—"}/{r.High?.ToString()??"—"}";mil.FontSize=s.Weapon=="mortar"?(Form=="compact"?27:30):corrected!=null?(Form=="compact"?27:30):17;mil.Foreground=r is {InRange:false}?amber:blue;mil.ToolTip=s.Weapon=="spg"?(corrected!=null?"倾斜补偿后的高抛密位":"低抛 / 高抛"):"迫击炮仰角";}
         if(status!=null){status.Text=Form=="bubble"?s.Paused?"Ⅱ":s.Waiting==Awaiting.Origin?"炮":s.Waiting==Awaiting.Target?"靶":"":$"● {s.Status} · {r?.Status??"等待坐标"}";status.Foreground=color;status.ToolTip=$"{s.Status} · {r?.Status??"等待坐标"}\n{c.Notices.FirstOrDefault()}";}
         if(bubbleDot!=null){bubbleDot.Fill=color;bubbleDot.Visibility=s.Paused||s.Waiting!=Awaiting.None?Visibility.Collapsed:Visibility.Visible;} if(weapon!=null)weapon.Content=(s.Weapon=="mortar"?"迫击炮":"SPH-2")+(Form=="compact"?"":" ↻");
+        if(calibrationButton!=null){calibrationButton.Visibility=s.Weapon=="spg"?Visibility.Visible:Visibility.Collapsed;calibrationButton.Content=c.PzhCalibrationLabel;calibrationButton.Foreground=c.PzhCalibrationLabel=="需重置校准"?amber:ink;}
         ActionLabel(map,Form=="compact"?GameMaps.ShortName(s.Map):GameMaps.Name(s.Map)+" ↻","map","切换地图 · 当前 "+s.Map);ActionLabel(mode,Form=="compact"?(s.Mode==InputMode.Smart?"智能":s.Mode==InputMode.Manual?"手动":"连续"):s.ModeText+" ↻","mode","切换坐标接收模式");
         ActionLabel(origin,"设炮位","origin","单击读取炮位 / 等待新坐标；双击粘贴输入；等待时再单击取消");ActionLabel(target,"选目标","target","单击读取目标 / 等待新坐标；双击粘贴输入");ActionLabel(pause,s.Paused?"恢复":"暂停","pause","停止 / 恢复坐标接收");
         if(origin?.Background is SolidColorBrush originBrush)
@@ -209,10 +217,10 @@ public partial class HudWindow:Window
         if(hiddenKey!=null){var key=c.Pref.Keys.GetValueOrDefault("hud","");hiddenKey.Text=key.Length>0?"隐藏 / 显示 HUD  "+key:"隐藏 / 显示 HUD：未绑定快捷键";}
         if(positions!=null)positions.Text=$"炮位  {s.Current.Origin?.ToString()??"未设置"}\n目标  {s.Current.Target?.ToString()??"未设置"}\n来源  {s.Current.Source}";
         if(originReadout!=null)originReadout.Text="炮位  "+(s.Current.Origin?.ToString()??"未设置");
-        if(targetReadout!=null)targetReadout.Text="目标  "+(s.Current.Target?.ToString()??"未设置")+(s.Current.Target is {} targetCoord?TowerSuffix(TowerProximity.Describe(targetCoord,c.Towers[s.Map])):"");
+        if(targetReadout!=null)targetReadout.Text="目标  "+(s.Current.Target?.ToString()??"未设置")+(s.Current.Target is {} targetCoord?TowerSuffix(TowerProximity.Describe(targetCoord,c.Towers[s.Map])):"")+(corrected is {} pc?$"\n校准后  {pc.Azimuth:0.0}°  /  {RoundMil(pc.Mil)} MIL":"");
         if(targetBack!=null)targetBack.Visibility=s.Current.Target==null?Visibility.Collapsed:Visibility.Visible;
         if(originBack!=null)originBack.Visibility=s.Current.Origin==null?Visibility.Collapsed:Visibility.Visible;
-        if(bubbleReadout!=null){bubbleReadout.Foreground=BubbleColor();bubbleReadout.Visibility=c.Pref.BubbleReadout?Visibility.Visible:Visibility.Collapsed;bubbleReadout.Text=$"{r?.Distance.ToString("0")??"—"}(m)  {(s.Weapon=="mortar"?r?.Single?.ToString()??"—":$"{r?.Low?.ToString()??"—"}/{r?.High?.ToString()??"—"}")} MIL  {r?.Azimuth?.ToString("0.0")??"—"} 度";}
+        if(bubbleReadout!=null){bubbleReadout.Foreground=BubbleColor();bubbleReadout.Visibility=c.Pref.BubbleReadout?Visibility.Visible:Visibility.Collapsed;bubbleReadout.Text=$"{r?.Distance.ToString("0")??"—"}(m)  {(s.Weapon=="mortar"?r?.Single?.ToString()??"—":corrected!=null?RoundMil(corrected.Mil):$"{r?.Low?.ToString()??"—"}/{r?.High?.ToString()??"—"}")} MIL  {corrected?.Azimuth.ToString("0.0")??r?.Azimuth?.ToString("0.0")??"—"} 度";}
         foreach(var (brush,button) in backgrounds){var colorValue=brush.Color;colorValue.A=(byte)(255*(Form=="settings"?1:Math.Clamp(button?c.Pref.HudButtonOpacity:c.Pref.HudTileOpacity,0,1)));brush.Color=colorValue;}
         if(shell!=null)shell.Background=new SolidColorBrush(Color.FromArgb((byte)((Form=="settings"?1:Math.Clamp(c.Pref.HudOpacity,.25,1))*255),20,25,35));
         if(Form=="bubble"){UpdateLayout();ClampPosition();}

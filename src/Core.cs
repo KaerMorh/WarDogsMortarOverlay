@@ -54,6 +54,67 @@ public class Weapon
     public Dictionary<string,double[][]> Ballistics {get;set;}=new();
 }
 public record Solution(double Distance,double? Azimuth,Mil? Single,Mil? Low,Mil? High,string Status,bool InRange);
+public record PzhShot(double Azimuth,double Mil,Coord Impact);
+public record PzhTilt(double East,double North,double RmsDegrees)
+{
+    public double MagnitudeDegrees=>Math.Sqrt(East*East+North*North)*180/Math.PI;
+}
+public record PzhCorrected(double Azimuth,double Mil);
+public static class PzhTiltCompensation
+{
+    public const double RadiansPerMil=.001;
+    static double Wrap(double value)=>Math.Atan2(Math.Sin(value),Math.Cos(value));
+    static double Bearing(double east,double north)=>Math.Atan2(east,north);
+    static double[] Rotate(double[] v,double east,double north,bool inverse=false)
+    {
+        var wx=-north;var wy=east;if(inverse){wx=-wx;wy=-wy;}
+        var a=Math.Sqrt(wx*wx+wy*wy);if(a<1e-15)return [v[0],v[1],v[2]];
+        var c=Math.Cos(a);var s=Math.Sin(a)/a;var b=(1-c)/(a*a);var dot=wx*v[0]+wy*v[1];
+        return [c*v[0]+s*wy*v[2]+b*wx*dot,c*v[1]-s*wx*v[2]+b*wy*dot,c*v[2]+s*(wx*v[1]-wy*v[0])];
+    }
+    static double PredictedBearing(PzhShot shot,double east,double north)
+    {
+        var a=shot.Azimuth*Math.PI/180;var e=shot.Mil*RadiansPerMil;
+        var v=Rotate([Math.Cos(e)*Math.Sin(a),Math.Cos(e)*Math.Cos(a),Math.Sin(e)],east,north);
+        return Bearing(v[0],v[1]);
+    }
+    public static PzhTilt? Fit(Coord origin,IReadOnlyList<PzhShot> shots)
+    {
+        var valid=shots.Where(s=>double.IsFinite(s.Azimuth)&&double.IsFinite(s.Mil)&&s.Mil>0&&
+            double.IsFinite(s.Impact.X)&&double.IsFinite(s.Impact.Y)&&Math.Sqrt(Math.Pow(s.Impact.X-origin.X,2)+Math.Pow(s.Impact.Y-origin.Y,2))>1e-9).ToArray();
+        if(valid.Length<2)return null;
+        double Loss(double east,double north)=>valid.Sum(s=>
+        {
+            var actual=Bearing(s.Impact.X-origin.X,s.Impact.Y-origin.Y);var d=Wrap(PredictedBearing(s,east,north)-actual);return d*d;
+        });
+        double pe=0,pn=0;
+        for(var step=.04;step>1e-9;step/=2)
+        {
+            for(var iteration=0;iteration<2000;iteration++)
+            {
+                var be=pe;var bn=pn;var best=Loss(pe,pn);
+                foreach(var de in new[]{-step,0d,step})foreach(var dn in new[]{-step,0d,step})
+                {
+                    var e=pe+de;var n=pn+dn;if(Math.Sqrt(e*e+n*n)>.3)continue;var value=Loss(e,n);
+                    if(value<best){best=value;be=e;bn=n;}
+                }
+                if(be==pe&&bn==pn)break;pe=be;pn=bn;
+            }
+        }
+        var rms=Math.Sqrt(Loss(pe,pn)/valid.Length)*180/Math.PI;
+        return new(pe,pn,rms);
+    }
+    public static PzhCorrected? Correct(double azimuth,double mil,PzhTilt tilt)
+    {
+        if(!double.IsFinite(azimuth)||!double.IsFinite(mil)||mil<=0)return null;
+        var a=azimuth*Math.PI/180;var e=mil*RadiansPerMil;
+        var v=Rotate([Math.Cos(e)*Math.Sin(a),Math.Cos(e)*Math.Cos(a),Math.Sin(e)],tilt.East,tilt.North,true);
+        var correctedElevation=Math.Atan2(v[2],Math.Sqrt(v[0]*v[0]+v[1]*v[1]));
+        var correctedAzimuth=(Bearing(v[0],v[1])*180/Math.PI+360)%360;
+        var correctedMil=correctedElevation/RadiansPerMil;
+        return double.IsFinite(correctedMil)?new(correctedAzimuth,correctedMil):null;
+    }
+}
 public class Ballistics
 {
     public Dictionary<string,Weapon> Weapons {get;}

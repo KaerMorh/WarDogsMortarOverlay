@@ -167,6 +167,15 @@ public partial class MainWindow:Window
             c.Pref.BubbleReadout=true;c.Hud.OpenSettings();Buttons(c.Hud).First(b=>b.Content as string=="橙色").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));c.Hud.SetForm("bubble");
             Check(Texts(c.Hud).Any(t=>t.Text.Contains(" MIL ")&&t.Foreground is SolidColorBrush {Color.R:255,Color.G:189,Color.B:135}),"bubble text color updates from settings");c.Pref.BubbleTextColor="#91C5FF";c.Pref.BubbleReadout=false;
             c.Hud.SetForm("panel");await Task.Delay(100);
+            c.State.Weapon="spg";c.State.SetOrigin(new(97.97,109.57),"验证");c.State.SetTarget(new(101.71,119.96),"验证");
+            var verificationShots=new List<PzhShot>{new(10.3,1303,new(101.48,120.16)),new(19.8,1315,new(103.39,119.01)),new(239.6,1302,new(88.82,101.71)),new(229.9,1292,new(89.62,100.01)),new(90,1300,new(111.45,108.04)),new(270,1300,new(86.91,108.30))};
+            c.Pref.Pzh=new(){Enabled=true,Map=c.State.Map,Origin=c.State.Current.Origin,Shots=verificationShots,Tilt=PzhTiltCompensation.Fit(c.State.Current.Origin!,verificationShots)};c.Refresh();c.Hud.UpdateLayout();
+            Check(c.PzhDisplay is {Active:true,Corrected:not null}&&Buttons(c.Hud).Any(b=>b.Content as string=="重新校准")&&Texts(c.Hud).Any(t=>t.Text.Contains("校准后")),"PZH calibration drives HUD correction and status entry");
+            Buttons(c.Hud).First(b=>b.Content as string=="重新校准").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));Check(c.PzhCalibrationWindow?.IsVisible==true,"HUD status entry opens PZH calibration window");
+            Check(Texts(c.PzhCalibrationWindow!).Any(t=>t.Text=="这是做什么的？")&&Texts(c.PzhCalibrationWindow!).Any(t=>t.Text.StartsWith("SPH-2停在斜坡时")),"PZH window explains its purpose and calibration flow");
+            Check(FindVisuals<CheckBox>(c.PzhCalibrationWindow!).Any(x=>x.Content as string=="开启倾斜补偿")&&Buttons(c.PzhCalibrationWindow!).Any(b=>b.Content as string=="从剪贴板添加")&&Buttons(c.PzhCalibrationWindow!).Any(b=>b.Content as string=="手动添加")&&Buttons(c.PzhCalibrationWindow!).Any(b=>b.Content as string=="重置全部"),"PZH window exposes enable, smart/manual add and reset controls");c.PzhCalibrationWindow!.Close();
+            c.State.SetOrigin(new(97.06,109.11),"验证");c.Hud.UpdateLayout();Check(!c.PzhCalibrationMatchesCurrent&&c.Pref.Pzh.Shots.Count==6&&Buttons(c.Hud).Any(b=>b.Content as string=="需重置校准"),"origin change preserves but invalidates PZH calibration");
+            c.State.Weapon="mortar";c.State.SetOrigin(new(80.52,69.85),"验证");c.State.SetTarget(new(81.52,70.85),"验证");c.Hud.SetForm("panel");
             var preview=new UpdateManifest("0.7.0","示例更新：改进地图交互，优化使用体验。",UpdateManifest.Repository+"/releases/download/v0.7.0/WarDogsOverlay-0.7.0-win-x64-Setup.exe",100,new string('0',64));
             typeof(UpdateService).GetProperty(nameof(UpdateService.Available))!.SetValue(c.Updates,preview);
             typeof(UpdateService).GetProperty(nameof(UpdateService.Status))!.SetValue(c.Updates,"发现新版本 0.7.0");
