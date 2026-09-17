@@ -94,7 +94,7 @@ public class Controller
         Demo=demo;Pref=new();Updates=new UpdateService(this);Updates.Changed+=()=>Updated?.Invoke();
         if(!demo)try{var path=Path.Combine(UserDir,"settings.json");if(File.Exists(path))Pref=JsonSerializer.Deserialize<Preferences>(File.ReadAllText(path),Json)??new();}catch{Notices.Add("设置读取失败 · 使用默认值");}
         Pref.Multiplayer??=new();
-        Pref.Pzh??=new();Pref.Pzh.Shots??=[];
+        Pref.Pzh??=new();Pref.Pzh.Shots??=[];Pref.Pzh.LinearShots??=[];
         if(Pref.Multiplayer.Role is not ("gunner" or "scout"))Pref.Multiplayer.Role="gunner";
         foreach(var (action,key) in new[]{("publishTask","Ctrl+Alt+3"),("roomTasks","Ctrl+Alt+T"),("roomPrevious","Ctrl+Alt+Up"),("roomNext","Ctrl+Alt+Down"),("roomConfirm","Ctrl+Alt+Enter"),("roomCancel","Ctrl+Alt+Escape")})Pref.Keys.TryAdd(action,key);
         State=Pref.Session;
@@ -113,7 +113,7 @@ public class Controller
         {
             if(p.Role==Awaiting.Origin&&Pref.Pzh.Origin!=null&&(Pref.Pzh.Map!=p.Map||Pref.Pzh.Origin!=p.Coordinate))
             {
-                var warn=!Pref.Pzh.NeedsReset&&Pref.Pzh.Tilt!=null;Pref.Pzh.NeedsReset=true;
+                var warn=!Pref.Pzh.NeedsReset&&(Pref.Pzh.Tilt!=null||Pref.Pzh.Linear!=null);Pref.Pzh.NeedsReset=true;
                 if(warn)Notify("PZH校准数据已保留 · 新炮位需要重置校准");
             }
             if(Dragging&&p.Source=="地图")dragUpdate=p;else RecordPosition(p);
@@ -132,16 +132,27 @@ public class Controller
         {
             var raw=Result;if(raw==null)return null;
             if(State.Weapon!="spg")return new(raw,null,false,"");
-            if(Pref.Pzh.Tilt==null)return new(raw,null,false,"尚未校准");
+            var calibrated=Pref.Pzh.Mode==PzhCalibrationMode.Linear?Pref.Pzh.Linear!=null:Pref.Pzh.Tilt!=null;
+            if(!calibrated)return new(raw,null,false,"尚未校准");
             if(!PzhCalibrationMatchesCurrent)return new(raw,null,false,"需重置校准");
             if(!Pref.Pzh.Enabled)return new(raw,null,false,"校准已关闭");
-            if(raw.Azimuth is not {} azimuth||raw.High==null)return new(raw,null,false,"无高抛解");
-            var corrected=PzhTiltCompensation.Correct(azimuth,(raw.High.Min+raw.High.Max)/2,Pref.Pzh.Tilt);
+            PzhCorrected? corrected;
+            if(Pref.Pzh.Mode==PzhCalibrationMode.Linear)
+            {
+                if(State.Current.Origin is not {} origin||State.Current.Target is not {} target)return new(raw,null,false,"无目标解");
+                var adjusted=Calculator.Solve(origin,PzhLinearCompensation.Correct(target,Pref.Pzh.Linear!),"spg");
+                corrected=adjusted.Azimuth is {} adjustedAzimuth&&adjusted.High is {} adjustedHigh?new(adjustedAzimuth,(adjustedHigh.Min+adjustedHigh.Max)/2):null;
+            }
+            else
+            {
+                if(raw.Azimuth is not {} azimuth||raw.High==null)return new(raw,null,false,"无高抛解");
+                corrected=PzhTiltCompensation.Correct(azimuth,(raw.High.Min+raw.High.Max)/2,Pref.Pzh.Tilt!);
+            }
             if(corrected==null||corrected.Mil<20||corrected.Mil>1390)return new(raw,null,false,"补偿后超出范围");
             return new(raw,corrected,true,"校准开启");
         }
     }
-    public string PzhCalibrationLabel=>Pref.Pzh.Tilt==null?"尚未校准":!PzhCalibrationMatchesCurrent?"需重置校准":Pref.Pzh.Enabled?"重新校准":"校准已关闭";
+    public string PzhCalibrationLabel=>(Pref.Pzh.Mode==PzhCalibrationMode.Linear?Pref.Pzh.Linear==null:Pref.Pzh.Tilt==null)?"尚未校准":!PzhCalibrationMatchesCurrent?"需重置校准":Pref.Pzh.Enabled?"重新校准":"校准已关闭";
     public void Notify(string message)
     {
         if(History.Count==0||History[0].Position!=null||History[0].Message!=message)AddHistory(new(DateTime.Now,message));

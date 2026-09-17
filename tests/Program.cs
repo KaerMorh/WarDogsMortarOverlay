@@ -27,6 +27,12 @@ var tilt=PzhTiltCompensation.Fit(pzhOrigin,pzhShots);Check(tilt!=null&&tilt.Magn
 var pzhCorrected=PzhTiltCompensation.Correct(19.8,1315,tilt!);Check(pzhCorrected!=null&&double.IsFinite(pzhCorrected.Azimuth)&&double.IsFinite(pzhCorrected.Mil),"PZH inverse correction finite");
 Check(PzhTiltCompensation.Fit(pzhOrigin,pzhShots.Take(1).ToArray())==null,"PZH needs two shots");
 var zero=PzhTiltCompensation.Correct(359.9,1300,new(0,0,0));Check(zero!=null&&Math.Abs(zero.Azimuth-359.9)<1e-9&&Math.Abs(zero.Mil-1300)<1e-9,"PZH zero tilt preserves solution");
+var linear=PzhLinearCompensation.Fit(new[]{new PzhLinearShot(new(101.71,119.96),new(101.51,122.02))});
+Check(linear!=null&&Math.Abs(linear.X-.2)<1e-9&&Math.Abs(linear.Y+2.06)<1e-9&&linear.RmsMeters<1e-9,"PZH XY fit from one A/B pair");
+var linearTarget=PzhLinearCompensation.Correct(new(100,120),linear!);Check(Math.Abs(linearTarget.X-100.2)<1e-9&&Math.Abs(linearTarget.Y-117.94)<1e-9,"PZH XY target correction");
+Check(PzhLinearCompensation.Fit(Array.Empty<PzhLinearShot>())==null,"PZH XY needs one pair");
+var convertedAim=b.TargetFromHighArc(pzhOrigin,19.8,1315);Check(convertedAim!=null,"PZH azimuth and MIL convert to aim coordinate");
+var convertedSolution=b.Solve(pzhOrigin,convertedAim!,"spg");Check(convertedSolution.Azimuth is {} convertedAzimuth&&Math.Abs(convertedAzimuth-19.8)<1e-9&&convertedSolution.High is {} convertedMil&&Math.Abs((convertedMil.Min+convertedMil.Max)/2-1315)<1e-6,"PZH aim coordinate round trips to azimuth and MIL");
 foreach(var w in b.Weapons.Values)foreach(var table in w.Ballistics.Values)foreach(var point in table){var m=Ballistics.Interpolate(table,point[0]);Check(m!=null&&m.Min<=point[1]&&m.Max>=point[1],"every node");}
 var s=new Session();var o=new Coord(80,70);var t=new Coord(81,70);s.OriginAction(o);Check(s.Current.Origin==o&&s.Waiting==Awaiting.None,"smart direct origin");
 s.OriginAction(o);Check(s.Waiting==Awaiting.Origin,"same origin waits");s.OnClipboard(o);Check(s.Waiting==Awaiting.Origin,"same clipboard remains waiting");s.OriginAction(null);Check(s.Waiting==Awaiting.None,"origin cancels");

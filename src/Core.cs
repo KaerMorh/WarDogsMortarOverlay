@@ -60,6 +60,20 @@ public record PzhTilt(double East,double North,double RmsDegrees)
     public double MagnitudeDegrees=>Math.Sqrt(East*East+North*North)*180/Math.PI;
 }
 public record PzhCorrected(double Azimuth,double Mil);
+public record PzhLinearShot(Coord Aim,Coord Impact);
+public record PzhLinearOffset(double X,double Y,double RmsMeters);
+public static class PzhLinearCompensation
+{
+    public static PzhLinearOffset? Fit(IReadOnlyList<PzhLinearShot> shots)
+    {
+        var valid=shots.Where(s=>double.IsFinite(s.Aim.X)&&double.IsFinite(s.Aim.Y)&&double.IsFinite(s.Impact.X)&&double.IsFinite(s.Impact.Y)).ToArray();
+        if(valid.Length==0)return null;
+        var x=valid.Average(s=>s.Aim.X-s.Impact.X);var y=valid.Average(s=>s.Aim.Y-s.Impact.Y);
+        var rms=Math.Sqrt(valid.Average(s=>Math.Pow((s.Aim.X-s.Impact.X)-x,2)+Math.Pow((s.Aim.Y-s.Impact.Y)-y,2)))*100;
+        return new(x,y,rms);
+    }
+    public static Coord Correct(Coord target,PzhLinearOffset offset)=>new(target.X+offset.X,target.Y+offset.Y);
+}
 public static class PzhTiltCompensation
 {
     public const double RadiansPerMil=.001;
@@ -135,6 +149,26 @@ public class Ballistics
             var mil=lm+(d-l.D)/(r.D-l.D)*(rm-lm);return new(mil,mil);
         }
         return null;
+    }
+    public static double? InterpolateDistance(double[][]? table,double mil)
+    {
+        if(table==null||!double.IsFinite(mil))return null;
+        var points=table.Where(x=>x.Length>=2&&double.IsFinite(x[0])&&double.IsFinite(x[1])).OrderBy(x=>x[0]).ToArray();
+        foreach(var p in points)if(Math.Abs(p[1]-mil)<=1e-6)return p[0];
+        for(var i=0;i<points.Length-1;i++)
+        {
+            var l=points[i];var r=points[i+1];
+            if(mil<Math.Min(l[1],r[1])||mil>Math.Max(l[1],r[1])||Math.Abs(r[1]-l[1])<1e-12)continue;
+            return l[0]+(mil-l[1])/(r[1]-l[1])*(r[0]-l[0]);
+        }
+        return null;
+    }
+    public Coord? TargetFromHighArc(Coord origin,double azimuth,double mil,string id="spg",double scale=100)
+    {
+        if(!Weapons.TryGetValue(id,out var weapon)||!weapon.Ballistics.TryGetValue("high",out var table)||!double.IsFinite(azimuth))return null;
+        var distance=InterpolateDistance(table,mil);if(distance==null)return null;
+        var radians=azimuth*Math.PI/180;var coordinateDistance=distance.Value/scale;
+        return new(origin.X+Math.Sin(radians)*coordinateDistance,origin.Y+Math.Cos(radians)*coordinateDistance);
     }
     public Solution Solve(Coord o,Coord t,string id,double scale=100)
     {

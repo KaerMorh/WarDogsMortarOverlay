@@ -102,7 +102,7 @@ public partial class HudWindow:Window
     {
         var grid=new Grid();grid.ColumnDefinitions.Add(new(){Width=new GridLength(1,GridUnitType.Star)});grid.ColumnDefinitions.Add(new(){Width=GridLength.Auto});
         status=Text("",compact?10:11,blue);status.TextTrimming=TextTrimming.CharacterEllipsis;grid.Children.Add(status);
-        calibrationButton=Btn("尚未校准",()=>c.ShowPzhCalibration(),"打开PZH倾斜校准",tiny:true);calibrationButton.Margin=new Thickness(6,0,0,0);Grid.SetColumn(calibrationButton,1);grid.Children.Add(calibrationButton);parent.Children.Add(Back(grid));
+        calibrationButton=Btn("尚未校准",()=>c.ShowPzhCalibration(),"打开PZH校准",tiny:true);calibrationButton.Margin=new Thickness(6,0,0,0);Grid.SetColumn(calibrationButton,1);grid.Children.Add(calibrationButton);parent.Children.Add(Back(grid));
     }
     void BuildPanel()
     {
@@ -201,7 +201,7 @@ public partial class HudWindow:Window
         if(settingsButton!=null)settingsButton.Content=UpdatePanel.Badge("设置",c.Updates.HasUpdate);
         var s=c.State;var r=c.Result;var display=c.PzhDisplay;var corrected=display?.Active==true?display.Corrected:null;var color=s.Paused?muted:s.Waiting!=Awaiting.None||r is {InRange:false}?amber:blue;
         if(distance!=null)distance.Text=r?.Distance.ToString("0")??"—";if(azimuth!=null)azimuth.Text=corrected?.Azimuth.ToString("0.0")??r?.Azimuth?.ToString("0.0")??"—";
-        if(mil!=null){mil.Text=r==null?"—":s.Weapon=="mortar"?r.Single?.ToString()??"—":corrected!=null?RoundMil(corrected.Mil):$"{r.Low?.ToString()??"—"}/{r.High?.ToString()??"—"}";mil.FontSize=s.Weapon=="mortar"?(Form=="compact"?27:30):corrected!=null?(Form=="compact"?27:30):17;mil.Foreground=r is {InRange:false}?amber:blue;mil.ToolTip=s.Weapon=="spg"?(corrected!=null?"倾斜补偿后的高抛密位":"低抛 / 高抛"):"迫击炮仰角";}
+        if(mil!=null){mil.Text=r==null?"—":s.Weapon=="mortar"?r.Single?.ToString()??"—":corrected!=null?RoundMil(corrected.Mil):$"{r.Low?.ToString()??"—"}/{r.High?.ToString()??"—"}";mil.FontSize=s.Weapon=="mortar"?(Form=="compact"?27:30):corrected!=null?(Form=="compact"?27:30):17;mil.Foreground=r is {InRange:false}?amber:blue;mil.ToolTip=s.Weapon=="spg"?(corrected!=null?"校准补偿后的高抛密位":"低抛 / 高抛"):"迫击炮仰角";}
         if(status!=null){status.Text=Form=="bubble"?s.Paused?"Ⅱ":s.Waiting==Awaiting.Origin?"炮":s.Waiting==Awaiting.Target?"靶":"":$"● {s.Status} · {r?.Status??"等待坐标"}";status.Foreground=color;status.ToolTip=$"{s.Status} · {r?.Status??"等待坐标"}\n{c.Notices.FirstOrDefault()}";}
         if(bubbleDot!=null){bubbleDot.Fill=color;bubbleDot.Visibility=s.Paused||s.Waiting!=Awaiting.None?Visibility.Collapsed:Visibility.Visible;} if(weapon!=null)weapon.Content=(s.Weapon=="mortar"?"迫击炮":"SPH-2")+(Form=="compact"?"":" ↻");
         if(calibrationButton!=null){calibrationButton.Visibility=s.Weapon=="spg"?Visibility.Visible:Visibility.Collapsed;calibrationButton.Content=c.PzhCalibrationLabel;calibrationButton.Foreground=c.PzhCalibrationLabel=="需重置校准"?amber:ink;}
