@@ -22,6 +22,7 @@ public class Preferences
 {
     public MultiplayerPreferences Multiplayer{get;set;}=new();
     public PzhCalibrationSettings Pzh{get;set;}=new();
+    public PzhReloadSettings PzhReload{get;set;}=new();
     public bool AutoCheckUpdates{get;set;}=true;
     public bool EnableTestFeatures{get;set;}
     public Session Session{get;set;}=new();
@@ -50,6 +51,7 @@ public class Controller
     public RoomCoordinator Rooms{get;}
     public TaskPickerWindow? TaskPicker{get;private set;}
     public PzhCalibrationWindow? PzhCalibrationWindow{get;private set;}
+    public PzhReloadService Reload{get;}
     public void ShowPzhCalibration()
     {
         if(PzhCalibrationWindow!=null){PzhCalibrationWindow.Show();PzhCalibrationWindow.Activate();return;}
@@ -58,6 +60,7 @@ public class Controller
     public void CalibrationWindowClosed(PzhCalibrationWindow window){if(ReferenceEquals(PzhCalibrationWindow,window))PzhCalibrationWindow=null;}
     public void ShowRoomTasks()
     {
+        Reload.Cancel("任务菜单已打开");
         if(TaskPicker!=null){TaskPicker.Show();return;}
         var picker=new TaskPickerWindow(this);TaskPicker=picker;picker.Closed+=(s,e)=>{if(ReferenceEquals(TaskPicker,picker))TaskPicker=null;};picker.Show();
     }
@@ -95,6 +98,7 @@ public class Controller
         if(!demo)try{var path=Path.Combine(UserDir,"settings.json");if(File.Exists(path))Pref=JsonSerializer.Deserialize<Preferences>(File.ReadAllText(path),Json)??new();}catch{Notices.Add("设置读取失败 · 使用默认值");}
         Pref.Multiplayer??=new();
         Pref.Pzh??=new();Pref.Pzh.Shots??=[];Pref.Pzh.LinearShots??=[];
+        Pref.PzhReload??=new();Pref.PzhReload.Normalize();
         if(Pref.Multiplayer.Role is not ("gunner" or "scout"))Pref.Multiplayer.Role="gunner";
         foreach(var (action,key) in new[]{("publishTask","Ctrl+Alt+3"),("roomTasks","Ctrl+Alt+T"),("roomPrevious","Ctrl+Alt+Up"),("roomNext","Ctrl+Alt+Down"),("roomConfirm","Ctrl+Alt+Enter"),("roomCancel","Ctrl+Alt+Escape")})Pref.Keys.TryAdd(action,key);
         State=Pref.Session;
@@ -109,15 +113,12 @@ public class Controller
             Towers[id]=doc.RootElement.GetProperty("markers").EnumerateArray().Where(x=>x.GetProperty("icon").GetString()=="tower")
                 .Select(x=>new TowerInfo(x.GetProperty("label").GetString()!,new(x.GetProperty("x").GetDouble()/100,x.GetProperty("y").GetDouble()/100))).ToArray();
         }
-        State.Notice+=Notify;State.Changed+=Refresh;State.PositionUpdated+=p=>
+        Reload=new PzhReloadService(this);
+        State.Notice+=Notify;State.Changed+=()=>{ResetPzhForCurrentOrigin();Reload.CheckConditions();Refresh();};State.PositionUpdated+=p=>
         {
-            if(p.Role==Awaiting.Origin&&Pref.Pzh.Origin!=null&&(Pref.Pzh.Map!=p.Map||Pref.Pzh.Origin!=p.Coordinate))
-            {
-                var warn=!Pref.Pzh.NeedsReset&&(Pref.Pzh.Tilt!=null||Pref.Pzh.Linear!=null);Pref.Pzh.NeedsReset=true;
-                if(warn)Notify("PZH校准数据已保留 · 新炮位需要重置校准");
-            }
             if(Dragging&&p.Source=="地图")dragUpdate=p;else RecordPosition(p);
         };
+        ResetPzhForCurrentOrigin();
         saveTimer.Tick+=(s,e)=>{saveTimer.Stop();Save();};
         Rooms=new RoomCoordinator(this);
         Rooms.Changed+=()=>Updated?.Invoke();
@@ -125,6 +126,14 @@ public class Controller
         Notify(demo?"演示数据 · 未监听剪贴板，正式启动即可使用":"已就绪 · 设置炮位开始使用");
     }
     public Solution? Result=>State.Current.Origin is {} o&&State.Current.Target is {} t?Calculator.Solve(o,t,State.Weapon):null;
+    void ResetPzhForCurrentOrigin()
+    {
+        if(State.Current.Origin is not {} origin||!Pref.Pzh.NeedsReset&&Pref.Pzh.Map==State.Map&&Pref.Pzh.Origin==origin)return;
+        var hadCalibration=Pref.Pzh.Tilt!=null||Pref.Pzh.Linear!=null||Pref.Pzh.Shots.Count>0||Pref.Pzh.LinearShots.Count>0;
+        Pref.Pzh.ResetForOrigin(State.Map,origin);
+        CancelPzhCoordinateCapture(false);
+        if(hadCalibration)Notify("新炮位已自动重置 PZH 校准");
+    }
     public bool PzhCalibrationMatchesCurrent=>!Pref.Pzh.NeedsReset&&Pref.Pzh.Origin is {} saved&&State.Current.Origin is {} current&&Pref.Pzh.Map==State.Map&&saved==current;
     public PzhDisplaySolution? PzhDisplay
     {
@@ -202,6 +211,7 @@ public class Controller
         lastSequence=GetClipboardSequenceNumber();
         if(!Demo&&!AddClipboardFormatListener(handle))Notify("剪贴板监听未启动 · 可使用手动输入");
         if(registerHotkeys)foreach(var action in Actions.Keys)Bind(action,Pref.Keys.GetValueOrDefault(action,""),false);
+        Reload.RefreshHook();
     }
     public async void Act(string action)
     {
@@ -212,7 +222,7 @@ public class Controller
         switch(action)
         {
             case "publishTask":Rooms.TogglePublish(GetClipboardSequenceNumber());break;
-            case "roomTasks":if(TaskPicker?.IsVisible==true)TaskPicker.Close();else ShowRoomTasks();break;
+            case "roomTasks":Reload.Cancel("任务菜单已打开");if(TaskPicker?.IsVisible==true)TaskPicker.Close();else ShowRoomTasks();break;
             case "roomPrevious":TaskPicker?.MoveSelection(-1);break;
             case "roomNext":TaskPicker?.MoveSelection(1);break;
             case "roomConfirm":TaskPicker?.Confirm();break;
@@ -225,7 +235,7 @@ public class Controller
             case "hud":if(Hud.IsVisible)Hud.Hide();else Hud.Show();Notify(Hud.IsVisible?"HUD 已显示":"HUD 已隐藏 · 可从主窗口恢复");break;
             case "mode":State.ChangeMode();Pending=null;break;
             case "map":State.ChangeMap();Pending=null;break;
-            case "weapon":State.ChangeWeapon();break;
+            case "weapon":Reload.Cancel("炮种已切换");State.ChangeWeapon();break;
             case "bubble":Hud.SetForm("bubble");break;
             case "compact":Hud.SetForm("compact");break;
             case "pending":if(Pending is {} p){Pending=null;if(pendingRole==Awaiting.Origin)State.SetOrigin(p);else State.SetTarget(p);Refresh();}break;
@@ -314,7 +324,7 @@ public class Controller
         if(origin)State.SetOrigin(c,"地图");else State.SetTarget(c,"地图",true);
     }
     public void ShowMap(){Main.ShowMapPage(this,new RoutedEventArgs());Main.Show();Main.WindowState=WindowState.Normal;Main.Activate();}
-    public async void Quit(){if(closing)return;PzhCalibrationWindow?.Close();if(PzhCalibrationWindow!=null)return;closing=true;Save();TaskPicker?.Close();await Rooms.ShutdownAsync();RemoveClipboardFormatListener(handle);foreach(var id in hotkeys.Keys)UnregisterHotKey(handle,id);source?.RemoveHook(WndProc);Application.Current.Shutdown();}
+    public async void Quit(){if(closing)return;PzhCalibrationWindow?.Close();if(PzhCalibrationWindow!=null)return;closing=true;Reload.Dispose();Save();TaskPicker?.Close();await Rooms.ShutdownAsync();RemoveClipboardFormatListener(handle);foreach(var id in hotkeys.Keys)UnregisterHotKey(handle,id);source?.RemoveHook(WndProc);Application.Current.Shutdown();}
     [DllImport("user32.dll")]static extern bool AddClipboardFormatListener(IntPtr h);
     [DllImport("user32.dll")]static extern bool RemoveClipboardFormatListener(IntPtr h);
     [DllImport("user32.dll")]static extern uint GetClipboardSequenceNumber();

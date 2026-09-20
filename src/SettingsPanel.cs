@@ -12,7 +12,8 @@ public class SettingsPanel:StackPanel
         Children.Add(new Border { Height=2, Background=(Brush)new BrushConverter().ConvertFromString("#536781")!, Margin=new Thickness(0,0,0,12) });
         Children.Add(Label("测试功能",16));
         var testing=new CheckBox{Content="开启测试功能（显示联机设置）",IsChecked=c.Pref.EnableTestFeatures,Foreground=Brushes.White,Margin=new Thickness(0,4,0,12)};
-        testing.Click+=(s,e)=>{c.Pref.EnableTestFeatures=testing.IsChecked==true;c.Save();c.Hud?.RefreshTestFeatures();};Children.Add(testing);
+        testing.Click+=(s,e)=>{c.Pref.EnableTestFeatures=testing.IsChecked==true;c.Reload.RefreshHook();c.Save();c.Hud?.RefreshTestFeatures();};Children.Add(testing);
+        Children.Add(new PzhReloadPanel(c));
         Children.Add(new Border{Height=1,Background=(Brush)new BrushConverter().ConvertFromString("#303B4D")!,Margin=new Thickness(0,4,0,12)});
         Children.Add(Label("快捷键",16));Children.Add(Label("直接输入组合键名称，或点“录入”后按键；每项单独保存。",11));
         foreach(var item in Controller.Actions)

@@ -20,6 +20,11 @@ public class PzhCalibrationSettings
     public PzhLinearOffset? Linear{get;set;}
     public DateTime? Updated{get;set;}
     public PzhCalibrationSettings Copy()=>new(){Enabled=Enabled,NeedsReset=NeedsReset,Mode=Mode,Map=Map,Origin=Origin,Shots=Shots.ToList(),Tilt=Tilt,LinearShots=LinearShots.ToList(),Linear=Linear,Updated=Updated};
+    public void ResetForOrigin(string map,Coord origin)
+    {
+        Enabled=false;NeedsReset=false;Map=map;Origin=origin;
+        Shots=[];Tilt=null;LinearShots=[];Linear=null;Updated=null;
+    }
 }
 
 public record PzhDisplaySolution(Solution Raw,PzhCorrected? Corrected,bool Active,string CalibrationStatus);
@@ -52,7 +57,7 @@ public class PzhCalibrationWindow:Window
         panel.Children.Add(new Border{Child=intro,Background=(Brush)new BrushConverter().ConvertFromString("#1A2432")!,BorderBrush=(Brush)new BrushConverter().ConvertFromString("#536781")!,BorderThickness=new Thickness(1),CornerRadius=new CornerRadius(7),Padding=new Thickness(12),Margin=new Thickness(0,0,0,12)});
 
         var modeRow=new StackPanel{Orientation=Orientation.Horizontal};modeRow.Children.Add(new TextBlock{Text="校准模式",VerticalAlignment=VerticalAlignment.Center,Margin=new Thickness(0,0,10,0)});mode.Items.Add("倾斜姿态补偿");mode.Items.Add("XY 线性补偿");mode.SelectedIndex=draft.Mode==PzhCalibrationMode.Linear?1:0;modeRow.Children.Add(mode);panel.Children.Add(modeRow);
-        panel.Children.Add(new TextBlock{Text="车辆换位置后需要重新校准。炮位变化只会停用旧补偿，不会自动删除已有数据。",Foreground=(Brush)new BrushConverter().ConvertFromString("#FFBD87")!,TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,8,0,10)});
+        panel.Children.Add(new TextBlock{Text="更换炮位后会自动清空旧校准点与补偿，直接开始新炮位校准。",Foreground=(Brush)new BrushConverter().ConvertFromString("#FFBD87")!,TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,8,0,10)});
         enabled.IsChecked=draft.Enabled;enabled.Click+=(s,e)=>{draft.Enabled=enabled.IsChecked==true;Changed();};panel.Children.Add(enabled);
         state.Margin=new Thickness(0,8,0,12);panel.Children.Add(state);
 
@@ -75,13 +80,20 @@ public class PzhCalibrationWindow:Window
     }
     void ControllerUpdated()=>Dispatcher.BeginInvoke(()=>
     {
-        if(draft.Origin!=null&&!draft.NeedsReset&&(draft.Map!=c.State.Map||draft.Origin!=c.State.Current.Origin)){draft.NeedsReset=true;dirty=true;}
+        if(c.State.Current.Origin is {} current&&(draft.NeedsReset||draft.Map!=c.State.Map||draft.Origin!=current))
+        {
+            c.CancelPzhCoordinateCapture(false);
+            draft=c.Pref.Pzh.Copy();dirty=false;
+            enabled.IsChecked=draft.Enabled;
+            syncing=true;mode.SelectedIndex=draft.Mode==PzhCalibrationMode.Linear?1:0;azimuth.Clear();mil.Clear();aimCoordinate.Clear();manual.Clear();syncing=false;
+            LoadCurrent();
+        }
         Render();
     });
     bool SameOrigin()=>!draft.NeedsReset&&draft.Map==c.State.Map&&draft.Origin==c.State.Current.Origin;
     void Refit(){draft.Tilt=draft.Origin is {} o?PzhTiltCompensation.Fit(o,draft.Shots):null;draft.Linear=PzhLinearCompensation.Fit(draft.LinearShots);}
     void Changed(){dirty=true;Refit();Render();}
-    void ChangeMode(){draft.Mode=mode.SelectedIndex==1?PzhCalibrationMode.Linear:PzhCalibrationMode.Tilt;dirty=true;LoadCurrent();Render();}
+    void ChangeMode(){if(syncing)return;draft.Mode=mode.SelectedIndex==1?PzhCalibrationMode.Linear:PzhCalibrationMode.Tilt;dirty=true;LoadCurrent();Render();}
     void LoadCurrent()
     {
         if(draft.Mode==PzhCalibrationMode.Linear&&c.State.Current.Target is {} target){SetAim(target);return;}
@@ -115,7 +127,7 @@ public class PzhCalibrationWindow:Window
     void Add(Coord impact)
     {
         if(c.State.Current.Origin==null){MessageBox.Show(this,"请先设置炮位。","PZH校准");return;}
-        EnsureDraftOrigin();if(!SameOrigin()){MessageBox.Show(this,"当前炮位已经变化。请先点“重置全部”，再为新位置添加落点。旧数据仍保留。","PZH校准");return;}
+        EnsureDraftOrigin();if(!SameOrigin()){MessageBox.Show(this,"炮位已变化，请重新打开校准窗口后再添加落点。","PZH校准");return;}
         if(draft.Mode==PzhCalibrationMode.Tilt){if(!TryParameters(out var a,out var m))return;draft.Shots.Add(new(a,m,impact));}
         else{if(!TryAim(out var aim))return;draft.LinearShots.Add(new(aim,impact));}
         manual.Clear();Changed();

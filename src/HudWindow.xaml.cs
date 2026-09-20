@@ -10,7 +10,7 @@ namespace WarDogs;
 public partial class HudWindow:Window
 {
     readonly Controller c;public string Form{get;private set;}="panel";string backForm="panel";
-    TextBlock? distance,mil,azimuth,status,notice,positions;Button? mode,map,weapon,pause,origin,target,latest,calibrationButton;Border? shell;
+    TextBlock? distance,mil,azimuth,status,notice,positions,reloadStatus;Button? mode,map,weapon,pause,origin,target,latest,calibrationButton;Border? shell;
     Expander? history;TextBlock? hiddenKey;Button? settingsButton;
     System.Windows.Shapes.Ellipse? bubbleDot; TextBlock? originReadout,targetReadout,bubbleReadout;Border? originBack,targetBack,quickInputBack;TextBox? quickInput;Button? quickConfirm;
     readonly List<(SolidColorBrush Brush,bool Button)> backgrounds=new();
@@ -22,7 +22,7 @@ public partial class HudWindow:Window
     static string RoundMil(double value)=>Math.Floor(value+.5).ToString("0",System.Globalization.CultureInfo.InvariantCulture);
     public HudWindow(Controller control)
     {
-        c=control;InitializeComponent();c.Updated+=Render;Surface.ContextMenuOpening+=(s,e)=>{Surface.ContextMenu=BubbleMenu();};
+        c=control;InitializeComponent();c.Updated+=Render;c.Reload.Changed+=Render;Surface.ContextMenuOpening+=(s,e)=>{Surface.ContextMenu=BubbleMenu();};
         Left=double.IsFinite(c.Pref.HudLeft)?c.Pref.HudLeft:SystemParameters.WorkArea.Right-370;
         Top=double.IsFinite(c.Pref.HudTop)?c.Pref.HudTop:80;
         SetForm(c.Pref.HudForm is "compact" or "bubble"?c.Pref.HudForm:"panel");
@@ -58,7 +58,7 @@ public partial class HudWindow:Window
     public void SetForm(string form)
     {
         if(form=="settings"&&Form!="settings")backForm=Form;
-        Form=form;distance=mil=azimuth=status=notice=positions=hiddenKey=null;mode=map=weapon=pause=origin=target=latest=settingsButton=calibrationButton=null;history=null;shell=null;
+        Form=form;distance=mil=azimuth=status=notice=positions=hiddenKey=reloadStatus=null;mode=map=weapon=pause=origin=target=latest=settingsButton=calibrationButton=null;history=null;shell=null;
         bubbleDot=null;originReadout=targetReadout=bubbleReadout=null;originBack=targetBack=quickInputBack=null;quickInput=null;quickConfirm=null;backgrounds.Clear();Surface.ContextMenu=null;
         c.IsRecordingHotkey=false;Surface.Children.Clear();Surface.LayoutTransform=new ScaleTransform(Math.Clamp(c.Pref.HudScale,.75,1.5),Math.Clamp(c.Pref.HudScale,.75,1.5));Opacity=1;
         if(form=="bubble")BuildBubble();else if(form=="compact")BuildCompact();else if(form=="settings")BuildSettings();else BuildPanel();
@@ -103,6 +103,8 @@ public partial class HudWindow:Window
         var grid=new Grid();grid.ColumnDefinitions.Add(new(){Width=new GridLength(1,GridUnitType.Star)});grid.ColumnDefinitions.Add(new(){Width=GridLength.Auto});
         status=Text("",compact?10:11,blue);status.TextTrimming=TextTrimming.CharacterEllipsis;grid.Children.Add(status);
         calibrationButton=Btn("尚未校准",()=>c.ShowPzhCalibration(),"打开PZH校准",tiny:true);calibrationButton.Margin=new Thickness(6,0,0,0);Grid.SetColumn(calibrationButton,1);grid.Children.Add(calibrationButton);parent.Children.Add(Back(grid));
+        reloadStatus=Text("",compact?10:11,muted);reloadStatus.TextWrapping=TextWrapping.Wrap;
+        var reloadBack=Back(reloadStatus);reloadBack.Margin=new Thickness(0,3,0,0);parent.Children.Add(reloadBack);
     }
     void BuildPanel()
     {
@@ -162,7 +164,7 @@ public partial class HudWindow:Window
         void Add(string label,Action action,string? key=null)=>menu.Items.Add(Item(label,action,key));
         Add("打开大地图",()=>c.ShowMap());var settingsItem=Item("设置",()=>OpenSettings());settingsItem.Header=UpdatePanel.Badge("设置",c.Updates.HasUpdate);settingsItem.HeaderTemplate=null;menu.Items.Add(settingsItem);Add("还原界面",()=>ShowForm("panel"));Add("简化界面",()=>ShowForm("compact"));Add("小球模式",()=>ShowForm("bubble"));
         var minimal=Item("小球极简化 · 右侧纯文字读数",()=>{c.Pref.BubbleReadout=!c.Pref.BubbleReadout;c.Refresh();c.Save();});minimal.IsCheckable=true;minimal.IsChecked=c.Pref.BubbleReadout;menu.Items.Add(minimal);menu.Items.Add(new Separator());
-        foreach(var (id,label) in new[]{("origin","设置炮位 / 取消等待"),("target","选定目标"),("pause",c.State.Paused?"恢复接收":"暂停接收")})Add(label,()=>c.Act(id),c.Pref.Keys.GetValueOrDefault(id));
+        foreach(var (id,label) in new[]{("origin","设置炮位 / 取消等待"),("target","选定目标"),("pause",c.State.Paused?"恢复接收":"暂停接收 / 取消自动装弹")})Add(label,()=>c.Act(id),c.Pref.Keys.GetValueOrDefault(id));
         var hudLabel=(IsVisible?"● 隐藏 HUD":"显示 HUD")+"    "+c.Pref.Keys.GetValueOrDefault("hud");
         var hudItem=Item(hudLabel,()=>c.Act("hud"));
         if(IsVisible)
@@ -205,6 +207,7 @@ public partial class HudWindow:Window
         if(status!=null){status.Text=Form=="bubble"?s.Paused?"Ⅱ":s.Waiting==Awaiting.Origin?"炮":s.Waiting==Awaiting.Target?"靶":"":$"● {s.Status} · {r?.Status??"等待坐标"}";status.Foreground=color;status.ToolTip=$"{s.Status} · {r?.Status??"等待坐标"}\n{c.Notices.FirstOrDefault()}";}
         if(bubbleDot!=null){bubbleDot.Fill=color;bubbleDot.Visibility=s.Paused||s.Waiting!=Awaiting.None?Visibility.Collapsed:Visibility.Visible;} if(weapon!=null)weapon.Content=(s.Weapon=="mortar"?"迫击炮":"SPH-2")+(Form=="compact"?"":" ↻");
         if(calibrationButton!=null){calibrationButton.Visibility=s.Weapon=="spg"?Visibility.Visible:Visibility.Collapsed;calibrationButton.Content=c.PzhCalibrationLabel;calibrationButton.Foreground=c.PzhCalibrationLabel=="需重置校准"?amber:ink;}
+        if(reloadStatus!=null){var enabled=c.Pref.EnableTestFeatures&&c.Pref.PzhReload.Enabled;reloadStatus.Text=$"自动装弹：{(enabled?"开":"关")}{(enabled&&s.Weapon!="spg"?"（仅 SPH-2 生效）":"")} · {c.Reload.Status} · 识别 {c.Reload.LastSequence}";reloadStatus.Foreground=enabled&&s.Weapon=="spg"?blue:muted;}
         ActionLabel(map,Form=="compact"?GameMaps.ShortName(s.Map):GameMaps.Name(s.Map)+" ↻","map","切换地图 · 当前 "+s.Map);ActionLabel(mode,Form=="compact"?(s.Mode==InputMode.Smart?"智能":s.Mode==InputMode.Manual?"手动":"连续"):s.ModeText+" ↻","mode","切换坐标接收模式");
         ActionLabel(origin,"设炮位","origin","单击读取炮位 / 等待新坐标；双击粘贴输入；等待时再单击取消");ActionLabel(target,"选目标","target","单击读取目标 / 等待新坐标；双击粘贴输入");ActionLabel(pause,s.Paused?"恢复":"暂停","pause","停止 / 恢复坐标接收");
         if(origin?.Background is SolidColorBrush originBrush)
