@@ -125,8 +125,14 @@ public partial class MainWindow:Window
             {
                 for(int i=0;i<VisualTreeHelper.GetChildrenCount(root);i++){var child=VisualTreeHelper.GetChild(root,i);if(child is Button button)yield return button;foreach(var nested in Buttons(child))yield return nested;}
             }
-            c.Pref.EnableTestFeatures=false;c.Hud.OpenSettings();c.Hud.UpdateLayout();Check(!Buttons(c.Hud).Any(b=>b.Content as string=="联机"),"multiplayer settings hidden by default");
-            var testing=FindVisuals<CheckBox>(c.Hud).First(x=>x.Content as string=="开启测试功能（显示联机设置）");testing.IsChecked=true;testing.RaiseEvent(new RoutedEventArgs(CheckBox.ClickEvent));await Task.Delay(100);c.Hud.UpdateLayout();Check(Buttons(c.Hud).Any(b=>b.Content as string=="联机"),"test feature option reveals multiplayer settings");c.Hud.SetForm("panel");
+            c.Pref.EnableTestFeatures=false;c.Pref.PzhReload.Enabled=false;c.Hud.OpenSettings();c.Hud.UpdateLayout();Check(!Buttons(c.Hud).Any(b=>b.Content as string=="联机"),"multiplayer settings hidden by default");
+            var reloadToggle=FindVisuals<CheckBox>(c.Hud).First(x=>x.Content as string=="自动装弹");
+            var reloadDetail=FindVisuals<TextBlock>(c.Hud).First(x=>x.Text.StartsWith("仅在 SPH-2 下运行"));
+            Check(!reloadDetail.IsVisible,"reload settings hidden while automatic reload is disabled");reloadToggle.IsChecked=true;reloadToggle.RaiseEvent(new RoutedEventArgs(CheckBox.ClickEvent));c.Hud.UpdateLayout();
+            Check(c.Pref.PzhReload.Enabled&&reloadDetail.IsVisible&&!c.Pref.EnableTestFeatures,"automatic reload enables independently and reveals its settings");reloadToggle.IsChecked=false;reloadToggle.RaiseEvent(new RoutedEventArgs(CheckBox.ClickEvent));
+            var testing=FindVisuals<CheckBox>(c.Hud).First(x=>x.Content as string=="显示连接功能");testing.IsChecked=true;testing.RaiseEvent(new RoutedEventArgs(CheckBox.ClickEvent));await Task.Delay(100);c.Hud.UpdateLayout();Check(Buttons(c.Hud).Any(b=>b.Content as string=="联机"),"connection feature option reveals multiplayer settings");c.Hud.SetForm("panel");
+            c.Pref.PzhReload.Enabled=true;c.Refresh();c.Hud.UpdateLayout();Check(!FindVisuals<TextBlock>(c.Hud).Any(t=>t.IsVisible&&t.Text.StartsWith("自动装弹 ·")),"reload HUD status stays hidden for mortar");
+            c.State.ChangeWeapon();c.Hud.UpdateLayout();Check(FindVisuals<TextBlock>(c.Hud).Any(t=>t.IsVisible&&t.Text.StartsWith("自动装弹 ·")),"reload HUD status appears for enabled SPH-2");c.State.ChangeWeapon();c.Pref.PzhReload.Enabled=false;c.Refresh();
             c.Hud.ExpandHistory();await Task.Delay(100);
             var historyButton=Buttons(c.Hud).First(b=>b.DataContext is HistoryEntry {Position.Role:Awaiting.Target});var chosen=(HistoryEntry)historyButton.DataContext;
             historyButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));Check(c.State.Current.Target==chosen.Position!.Coordinate&&c.State.Current.Source=="历史恢复","actual history button restores coordinate");

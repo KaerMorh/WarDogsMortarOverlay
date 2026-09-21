@@ -13,16 +13,16 @@ public sealed class PzhReloadPanel : StackPanel
         var muted = (Brush)new BrushConverter().ConvertFromString("#ACB8CA")!;
         TextBlock Text(string value) => new() { Text = value, Foreground = muted, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 5) };
         Button Button(string value) => new() { Content = value, Padding = new Thickness(8, 5, 8, 5), Margin = new Thickness(0, 2, 6, 4) };
-        Children.Add(Text("PZH 自动装弹（实验）"));
-        Children.Add(Text("自动输入仅在 SPH-2 且测试功能总开关开启时运行。射击后在游戏中按换弹键；Esc 取消。"));
-        var enabled = new CheckBox { Content = "开启 PZH 自动装弹", Foreground = Brushes.White, IsChecked = settings.Enabled, Margin = new Thickness(0, 3, 0, 8) };
-        enabled.Click += (_, _) => { settings.Enabled = enabled.IsChecked == true; c.Reload.RefreshHook(); c.Save(); };
+        var enabled = new CheckBox { Content = "自动装弹", Foreground = Brushes.White, IsChecked = settings.Enabled, Margin = new Thickness(12, 3, 0, 8) };
         Children.Add(enabled);
-        Children.Add(Text("换弹键（单个字母或数字，默认 R）"));
+        var details = new StackPanel { Margin = new Thickness(24, 0, 0, 0), Visibility = settings.Enabled ? Visibility.Visible : Visibility.Collapsed };
+        Children.Add(details);
+        details.Children.Add(Text("仅在 SPH-2 下运行。射击后在游戏中按换弹键；Esc 取消。"));
+        details.Children.Add(Text("换弹键（单个字母或数字，默认 R）"));
         var keyRow = new WrapPanel();
         var key = new TextBox { Text = settings.TriggerKey, Width = 65, Padding = new Thickness(6), Margin = new Thickness(0, 0, 6, 0) };
         var record = Button("录入"); var saveKey = Button("保存换弹键");
-        keyRow.Children.Add(key); keyRow.Children.Add(record); keyRow.Children.Add(saveKey); Children.Add(keyRow);
+        keyRow.Children.Add(key); keyRow.Children.Add(record); keyRow.Children.Add(saveKey); details.Children.Add(keyRow);
         bool recording = false;
         record.Click += (_, _) => { c.Reload.Cancel("正在录入换弹键"); recording = true; c.IsRecordingHotkey = true; key.Text = "…"; key.Focus(); };
         key.PreviewKeyDown += (_, e) =>
@@ -42,10 +42,10 @@ public sealed class PzhReloadPanel : StackPanel
             settings.TriggerKey = name; c.Reload.RefreshHook(); c.Save();
         };
         var region = Text($"识别区域：{settings.RegionX:P1}, {settings.RegionY:P1}, {settings.RegionWidth:P1} × {settings.RegionHeight:P1}");
-        Children.Add(region);
+        details.Children.Add(region);
         var regionRow = new WrapPanel();
         var select = Button("框选识别区域"); var reset = Button("恢复默认区域"); var test = Button("测试识别");
-        regionRow.Children.Add(select); regionRow.Children.Add(reset); regionRow.Children.Add(test); Children.Add(regionRow);
+        regionRow.Children.Add(select); regionRow.Children.Add(reset); regionRow.Children.Add(test); details.Children.Add(regionRow);
         void SelectRegion(System.Drawing.Rectangle bounds)
         {
             bool saved = false;
@@ -65,12 +65,12 @@ public sealed class PzhReloadPanel : StackPanel
         select.Click += (_, _) => c.Reload.ArmRegionSelection(SelectRegion);
         reset.Click += (_, _) => { c.Reload.Cancel("识别区域已修改"); settings.ResetRegion(); c.Save(); region.Text = $"识别区域：{settings.RegionX:P1}, {settings.RegionY:P1}, {settings.RegionWidth:P1} × {settings.RegionHeight:P1}"; };
         test.Click += (_, _) => c.Reload.ArmRecognitionTest();
-        Children.Add(Text("每次最多提交组数（1–8；提交不等于游戏确认成功）"));
+        details.Children.Add(Text("每次最多提交组数（1–8；提交不等于游戏确认成功）"));
         var countRow = new WrapPanel(); var count = new TextBox { Text = settings.GroupLimit.ToString(), Width = 65, Padding = new Thickness(6) }; var saveCount = Button("保存组数");
-        countRow.Children.Add(count); countRow.Children.Add(saveCount); Children.Add(countRow);
+        countRow.Children.Add(count); countRow.Children.Add(saveCount); details.Children.Add(countRow);
         saveCount.Click += (_, _) => { if (!int.TryParse(count.Text, out int value) || value is < 1 or > 8) { c.Notify("组数须为 1–8"); return; } c.Reload.Cancel("组数已修改"); settings.GroupLimit = value; c.Save(); };
         var advanced = new Expander { Header = "高级时间参数（毫秒）", Foreground = Brushes.White, Margin = new Thickness(0, 8, 0, 8) };
-        var advancedBody = new StackPanel(); advanced.Content = advancedBody; Children.Add(advanced);
+        var advancedBody = new StackPanel(); advanced.Content = advancedBody; details.Children.Add(advanced);
         var fields = new List<(string Label, TextBox Box, Action<int> Apply, int Min, int Max)>();
         void Field(string label, int value, Action<int> apply, int min, int max)
         {
@@ -98,7 +98,13 @@ public sealed class PzhReloadPanel : StackPanel
             for (int i = 0; i < fields.Count; i++) fields[i].Apply(values[i]);
             c.Save();
         };
-        var status = Text(""); status.Foreground = Brushes.White; Children.Add(status);
+        var status = Text(""); status.Foreground = Brushes.White; details.Children.Add(status);
+        enabled.Click += (_, _) =>
+        {
+            settings.Enabled = enabled.IsChecked == true;
+            details.Visibility = settings.Enabled ? Visibility.Visible : Visibility.Collapsed;
+            c.Reload.RefreshHook(); c.Save(); c.Refresh();
+        };
         void Refresh() => status.Text = $"状态：{c.Reload.Status} · 最近识别：{c.Reload.LastSequence}";
         Loaded += (_, _) => { c.Reload.Changed += Refresh; Refresh(); };
         Unloaded += (_, _) => { c.Reload.Changed -= Refresh; recording = false; c.IsRecordingHotkey = false; };

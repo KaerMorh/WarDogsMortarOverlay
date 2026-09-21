@@ -60,6 +60,7 @@ public sealed class PzhReloadService : IDisposable
     readonly object gate = new();
     CancellationTokenSource? session;
     Task? running;
+    int sessionVersion;
     string cancellationReason = "已取消";
     IntPtr hook;
     HookCallback? callback;
@@ -98,7 +99,7 @@ public sealed class PzhReloadService : IDisposable
         hook = SetWindowsHookEx(13, callback, GetModuleHandle(null), 0);
         Update(PzhReloadState.Idle, hook == IntPtr.Zero ? "键盘监听启动失败" : testArmed ? "测试待命 · 在游戏中按换弹键" : regionArmed ? "框选待命 · 在游戏中按换弹键" : "就绪 · 等待换弹键");
     }
-    bool AllowedSettings => !owner.Demo && !owner.IsClosing && owner.Pref.EnableTestFeatures && owner.Pref.PzhReload.Enabled;
+    bool AllowedSettings => !owner.Demo && !owner.IsClosing && owner.Pref.PzhReload.Enabled;
     bool Ready => AllowedSettings && owner.State.Weapon == "spg" && !owner.State.Paused && !owner.IsRecordingHotkey && !Selecting && owner.TaskPicker?.IsVisible != true;
     public void CheckConditions()
     {
@@ -155,6 +156,7 @@ public sealed class PzhReloadService : IDisposable
         bool test = testArmed, select = regionArmed;
         if (!test && !select && !Ready) return;
         var settings = owner.Pref.PzhReload.Copy();
+        if (!test && !select) InterruptForNewTrigger();
         if (!TryGetForegroundTarget(out var target, out var bounds, out var reason))
         {
             if (test || select) Update(PzhReloadState.Idle, "等待在游戏窗口按换弹键");
@@ -171,16 +173,47 @@ public sealed class PzhReloadService : IDisposable
         }
         if (!test && !Ready) return;
         GetWindowThreadProcessId(target, out uint processId);
+        if (test) EndOneShot();
+        StartSession(token => test ? TestAsync(target, processId, settings, token) : RunAsync(target, processId, settings, token),
+            test ? "重新开始测试识别" : "已由新的换弹操作重启");
+    }
+    void InterruptForNewTrigger()
+    {
         lock (gate)
         {
-            if (running is { IsCompleted: false }) return;
-            if (test) EndOneShot();
-            session?.Dispose();
-            session = new CancellationTokenSource();
-            cancellationReason = "已取消";
-            var token = session.Token;
-            running = Task.Run(() => test ? TestAsync(target, processId, settings, token) : RunAsync(target, processId, settings, token));
+            cancellationReason = "已由新的换弹操作重启";
+            sessionVersion++;
+            session?.Cancel();
         }
+        ReleaseHeld();
+    }
+    void StartSession(Func<CancellationToken, Task> work, string restartReason)
+    {
+        Task? previous;
+        int version;
+        lock (gate)
+        {
+            previous = running;
+            cancellationReason = restartReason;
+            session?.Cancel();
+            version = ++sessionVersion;
+            running = StartAfterPreviousAsync(previous, version, work);
+        }
+    }
+    async Task StartAfterPreviousAsync(Task? previous, int version, Func<CancellationToken, Task> work)
+    {
+        await Task.Yield();
+        if (previous != null) try { await previous; } catch { }
+        CancellationTokenSource next;
+        lock (gate)
+        {
+            if (version != sessionVersion) return;
+            session?.Dispose();
+            next = new CancellationTokenSource();
+            session = next;
+            cancellationReason = "已取消";
+        }
+        await Task.Run(() => work(next.Token));
     }
     async Task TestAsync(IntPtr target, uint processId, PzhReloadSettings settings, CancellationToken token)
     {
@@ -226,14 +259,14 @@ public sealed class PzhReloadService : IDisposable
         bool wasArmed = testArmed || regionArmed;
         testArmed = regionArmed = false;
         regionCallback = null;
-        lock (gate) { cancellationReason = reason; session?.Cancel(); }
+        lock (gate) { cancellationReason = reason; sessionVersion++; session?.Cancel(); }
         if (!AllowedSettings && hook != IntPtr.Zero) { UnhookWindowsHookEx(hook); hook = IntPtr.Zero; }
         if (State != PzhReloadState.Idle || wasArmed) Update(PzhReloadState.Idle, reason);
     }
     async Task RunAsync(IntPtr target, uint processId, PzhReloadSettings settings, CancellationToken token)
     {
         int groups = 0;
-        string previous = "", candidate = "", stop = "已取消";
+        string candidate = "", stop = "已取消";
         Rectangle[]? candidateBounds = null;
         int stable = 0;
         var started = Stopwatch.StartNew();
@@ -251,10 +284,9 @@ public sealed class PzhReloadService : IDisposable
                 Recognition result;
                 using (bitmap) result = QteRecognizer.RecognizeRegion(bitmap, height);
                 if (result.Accepted) ReportSequence(result.Sequence);
-                // A failed recognition is not proof that the previous group left the screen.
-                // Until real game feedback is verified, identical consecutive groups stop at the transition timeout.
-                bool changed = groups == 0 || (result.Accepted && result.Sequence != previous);
-                if (result.Accepted && changed)
+                // Only a stable set of four white arrows is accepted. Pressed green/red arrows
+                // drop out naturally; the next white group may repeat the same directions.
+                if (result.Accepted)
                 {
                     var bounds = result.Arrows.Select(a => a.Bounds).ToArray();
                     if (candidate == result.Sequence && candidateBounds != null && bounds.Zip(candidateBounds).All(pair => Math.Abs(pair.First.X - pair.Second.X) <= 4 && Math.Abs(pair.First.Y - pair.Second.Y) <= 4)) stable++;
@@ -271,7 +303,6 @@ public sealed class PzhReloadService : IDisposable
                             await Task.Delay(settings.KeyGapMs, token);
                         }
                         groups++;
-                        previous = candidate;
                         candidate = ""; candidateBounds = null; stable = 0;
                         if (groups >= settings.GroupLimit) { stop = $"已提交 {groups} 组（未确认装弹成功）"; break; }
                         phase.Restart();

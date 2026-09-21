@@ -98,6 +98,20 @@ foreach (var file in files)
     using (var g = Graphics.FromImage(partial))
         g.FillRectangle(Brushes.Black, area.X, area.Y, area.Width / 4, area.Height);
     Check($"{name} incomplete", QteRecognizer.Recognize(partial), "");
+
+    // A pressed arrow changes away from white (green on success, red on failure),
+    // so the old group must no longer be accepted as a fresh four-white-arrow QTE.
+    var white = QteRecognizer.Recognize(original);
+    using var pressed = new Bitmap(original);
+    var first = white.Arrows[0].Bounds;
+    for (int y = first.Top; y < first.Bottom; y++)
+    for (int x = first.Left; x < first.Right; x++)
+    {
+        var color = pressed.GetPixel(x, y);
+        int min = Math.Min(color.R, Math.Min(color.G, color.B)), max = Math.Max(color.R, Math.Max(color.G, color.B));
+        if (min >= 160 && max - min <= 55) pressed.SetPixel(x, y, Color.LimeGreen);
+    }
+    Check($"{name} pressed arrow is not white", QteRecognizer.Recognize(pressed), "");
 }
 using (var blank = new Bitmap(2560, 1440))
 {
