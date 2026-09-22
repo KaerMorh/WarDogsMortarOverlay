@@ -11,27 +11,23 @@ public class SettingsPanel:StackPanel
         Children.Add(new Border { Child=new UpdatePanel(c), Background=(Brush)new BrushConverter().ConvertFromString("#202E42")!, BorderBrush=(Brush)new BrushConverter().ConvertFromString("#536781")!, BorderThickness=new Thickness(1), CornerRadius=new CornerRadius(8), Padding=new Thickness(12), Margin=new Thickness(0,0,0,12) });
         Children.Add(new Border { Height=2, Background=(Brush)new BrushConverter().ConvertFromString("#536781")!, Margin=new Thickness(0,0,0,12) });
         Children.Add(Label("测试功能",16));
-        Children.Add(Label("以下功能可分别开启。",11));
-        var testing=new CheckBox{Content="显示连接功能",IsChecked=c.Pref.EnableTestFeatures,Foreground=Brushes.White,Margin=new Thickness(12,4,0,8)};
-        testing.Click+=(s,e)=>{c.Pref.EnableTestFeatures=testing.IsChecked==true;c.Save();c.Hud?.RefreshTestFeatures();};Children.Add(testing);
-        Children.Add(new PzhReloadPanel(c));
+        Children.Add(Label("每个功能独立开启，设置互不影响。",11));
+        Border Feature(string title,string description,UIElement content)
+        {
+            var panel=new StackPanel();panel.Children.Add(new TextBlock{Text=title,FontSize=14,FontWeight=FontWeights.SemiBold,Foreground=Brushes.White});panel.Children.Add(Label(description,11));panel.Children.Add(content);
+            return new Border{Child=panel,Background=(Brush)new BrushConverter().ConvertFromString("#182437")!,BorderBrush=(Brush)new BrushConverter().ConvertFromString("#3D4B61")!,BorderThickness=new Thickness(1),CornerRadius=new CornerRadius(8),Padding=new Thickness(12,9,12,10),Margin=new Thickness(0,0,0,10)};
+        }
+        var testing=new CheckBox{Content="显示连接功能",IsChecked=c.Pref.EnableTestFeatures,Foreground=Brushes.White,Margin=new Thickness(0,3,0,3)};
+        testing.Click+=(s,e)=>{c.Pref.EnableTestFeatures=testing.IsChecked==true;c.Save();c.Hud?.RefreshTestFeatures();};Children.Add(Feature("联机功能","开启房间、成员列表和任务共享入口。",testing));
+        Children.Add(Feature("PZH 自动装弹","识别并自动输入 SPH-2 换弹 QTE。",new PzhReloadPanel(c)));
+        var ocrTools=new StackPanel();var ocrEnabled=new CheckBox{Content="开启 DeepSeek OCR",IsChecked=c.Pref.DeepSeekOcr.Enabled,Foreground=Brushes.White,Margin=new Thickness(0,3,0,6)};var openOcr=new Button{Content="打开 OCR 设置",Padding=new Thickness(8,5,8,5),HorizontalAlignment=HorizontalAlignment.Left};ocrTools.Children.Add(ocrEnabled);ocrTools.Children.Add(openOcr);Children.Add(Feature("DeepSeek OCR","截图识别地图坐标；API、测试和区域设置位于独立标签。",ocrTools));
+        ocrEnabled.Click+=(_,_)=>c.SetOcrEnabled(ocrEnabled.IsChecked==true);openOcr.Click+=(_,_)=>c.Hud.OpenSettings("ocr");
+        void SyncOcr(){ocrEnabled.IsChecked=c.Pref.DeepSeekOcr.Enabled;}Loaded+=(_,_)=>c.Updated+=SyncOcr;Unloaded+=(_,_)=>c.Updated-=SyncOcr;
         Children.Add(new Border{Height=1,Background=(Brush)new BrushConverter().ConvertFromString("#303B4D")!,Margin=new Thickness(0,4,0,12)});
         Children.Add(Label("快捷键",16));Children.Add(Label("直接输入组合键名称，或点“录入”后按键；每项单独保存。",11));
         foreach(var item in Controller.Actions)
         {
-            Children.Add(Label(item.Value));var row=new DockPanel{Margin=new Thickness(0,0,0,5)};
-            Button Small(string t)=>new(){Content=t,Padding=new Thickness(7,5,7,5),Margin=new Thickness(4,0,0,0),FontSize=11};
-            var save=Small("保存");DockPanel.SetDock(save,Dock.Right);row.Children.Add(save);
-            var record=Small("录入");DockPanel.SetDock(record,Dock.Right);row.Children.Add(record);
-            var clear=Small("清除");DockPanel.SetDock(clear,Dock.Right);row.Children.Add(clear);
-            var box=new TextBox{Text=c.Pref.Keys.GetValueOrDefault(item.Key,""),FontSize=11,Padding=new Thickness(7,5,7,5),MinWidth=90};row.Children.Add(box);bool recording=false;
-            void RegisteredKey(string gesture){if(recording){box.Text=gesture;recording=false;c.IsRecordingHotkey=false;}}
-            Loaded+=(s,e)=>{box.Text=c.Pref.Keys.GetValueOrDefault(item.Key,"");c.HotkeyRecorded+=RegisteredKey;};Unloaded+=(s,e)=>{c.HotkeyRecorded-=RegisteredKey;recording=false;};
-            record.Click+=(s,e)=>{recording=true;c.IsRecordingHotkey=true;box.Text="请按快捷键…";box.Focus();};
-            box.PreviewKeyDown+=(s,e)=>{if(!recording)return;e.Handled=true;var key=e.Key==Key.System?e.SystemKey:e.Key;if(key is Key.LeftCtrl or Key.RightCtrl or Key.LeftAlt or Key.RightAlt or Key.LeftShift or Key.RightShift or Key.LWin or Key.RWin)return;
-                if(key==Key.Escape)box.Text=c.Pref.Keys.GetValueOrDefault(item.Key,"");else{try{box.Text=new KeyGestureConverter().ConvertToInvariantString(new KeyGesture(key,Keyboard.Modifiers))??"";}catch{box.Text="";c.Notify("请使用修饰键组合，或 F1–F24");}}recording=false;c.IsRecordingHotkey=false;};
-            box.LostKeyboardFocus+=(s,e)=>{if(recording){recording=false;c.IsRecordingHotkey=false;box.Text=c.Pref.Keys.GetValueOrDefault(item.Key,"");}};
-            clear.Click+=(s,e)=>{if(c.Bind(item.Key,""))box.Text="";};save.Click+=(s,e)=>{if(!c.Bind(item.Key,box.Text))box.Text=c.Pref.Keys.GetValueOrDefault(item.Key,"");};Children.Add(row);
+            Children.Add(Label(item.Value));Children.Add(new HotkeyEditor(c,item.Key));
         }
         Children.Add(new Border{Height=1,Background=(Brush)new BrushConverter().ConvertFromString("#303B4D")!,Margin=new Thickness(0,16,0,12)});
         Children.Add(Label("悬浮窗外观",16));Children.Add(Label("面板背景浓度（数字保持清晰）",11));

@@ -43,5 +43,6 @@ Desktop.ini
 *.p12
 *.private.xml
 **/Verification/
+test/ocr-example/testDeepseekAPI.txt
 # 更新公钥是客户端信任根，必须纳入版本控制
 !src/update-public.pem

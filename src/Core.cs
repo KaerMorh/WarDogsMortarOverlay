@@ -228,6 +228,7 @@ public class Session
     public string ModeText=>Mode switch{InputMode.Continuous=>"连续目标",InputMode.Manual=>"精确手动",_=>"智能模式"};
     public string Status=>Paused?"已暂停":Waiting==Awaiting.Origin?"等待复制炮位":Waiting==Awaiting.Target?"等待复制目标":Mode==InputMode.Continuous?"连续接收目标":Mode==InputMode.Manual?"手动读取":"就绪";
     public void Tell(string text){Notice?.Invoke(text);Changed?.Invoke();}
+    public void CancelWaiting(){if(Waiting!=Awaiting.None){Waiting=Awaiting.None;Changed?.Invoke();}}
     public void SetOrigin(Coord c,string source="剪贴板")
     {
         var s=Current;if(s.Origin!=c)s.Target=null;

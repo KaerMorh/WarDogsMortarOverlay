@@ -59,7 +59,7 @@ public partial class MainWindow:Window
         StateLabel.Text="●  "+s.Status;OriginLabel.Text=s.Current.Origin?.ToString()??"尚未设置";TargetLabel.Text=s.Current.Target?.ToString()??"尚未设置";
         SourceLabel.Text=$"来源 {s.Current.Source}   ·   {s.Current.Updated?.ToString("HH:mm:ss")??"—"}";
         PendingPanel.Visibility=c.Pending!=null?Visibility.Visible:Visibility.Collapsed;
-        NoticeList.Text=string.Join("\n",c.Notices.Take(2));SendMap();
+        NoticeList.Text=c.Ocr.StatusText??string.Join("\n",c.Notices.Take(2));SendMap();
     }
     void ActionClick(object sender,RoutedEventArgs e)=>c.Act((string)((Button)sender).Tag);
     void QuitClick(object s,RoutedEventArgs e)=>c.Quit();
@@ -83,7 +83,8 @@ public partial class MainWindow:Window
         void Check(bool ok,string text){if(!ok)throw new Exception(text);log.Add("PASS "+text);}
         try
         {
-            var defaults=new Preferences();Check(defaults.BubbleReadout&&!defaults.EnableTestFeatures&&defaults.HudOpacity==0.5683815809559255&&defaults.HudButtonOpacity==.75&&defaults.HudTileOpacity==.75,"recorded appearance defaults and disabled test features");
+            var defaults=new Preferences();Check(defaults.BubbleReadout&&!defaults.EnableTestFeatures&&!defaults.DeepSeekOcr.Enabled&&defaults.HudOpacity==0.5683815809559255&&defaults.HudButtonOpacity==.75&&defaults.HudTileOpacity==.75,"recorded appearance defaults and disabled test features");
+            c.Pref.DeepSeekOcr.Enabled=false;c.Hud.OpenSettings();c.Hud.UpdateLayout();Check(FindVisuals<TextBlock>(c.Hud).Any(t=>t.Text=="联机功能")&&FindVisuals<TextBlock>(c.Hud).Any(t=>t.Text=="PZH 自动装弹")&&FindVisuals<TextBlock>(c.Hud).Any(t=>t.Text=="DeepSeek OCR")&&FindVisuals<Button>(c.Hud).Any(b=>b.Content as string=="DeepSeek OCR"),"test features use separate cards and OCR has its own tab");c.Hud.OpenSettings("ocr");c.Hud.UpdateLayout();var earlyOcrToggle=FindVisuals<CheckBox>(c.Hud).First(x=>x.Content as string=="DeepSeek OCR");var earlyOcrDetail=FindVisuals<TextBlock>(c.Hud).First(x=>x.Text.StartsWith("在游戏内按快捷键截取地图"));Check(!earlyOcrDetail.IsVisible,"OCR settings hidden while disabled");earlyOcrToggle.IsChecked=true;earlyOcrToggle.RaiseEvent(new RoutedEventArgs(CheckBox.ClickEvent));c.Hud.UpdateLayout();var apiInput=FindVisuals<PasswordBox>(c.Hud).First(p=>p.IsVisible);var acceptsPointer=(bool)typeof(HudWindow).GetMethod("IsControl",System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic)!.Invoke(c.Hud,new object?[]{apiInput})!;Check(c.Pref.DeepSeekOcr.Enabled&&earlyOcrDetail.IsVisible&&!c.Pref.EnableTestFeatures&&FindVisuals<Button>(c.Hud).Any(b=>b.Content as string=="测试 API（文字＋图片）")&&acceptsPointer,"OCR independent tab enables and API field accepts input focus");earlyOcrToggle.IsChecked=false;earlyOcrToggle.RaiseEvent(new RoutedEventArgs(CheckBox.ClickEvent));c.Hud.SetForm("panel");
             for(int n=0;n<100&&!ready;n++)await Task.Delay(100);
             Check(ready,"WebView2 local map ready");
             Check(c.Result?.Single?.ToString()=="690","HUD initial demo 300m -> 690 MIL");

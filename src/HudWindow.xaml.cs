@@ -175,7 +175,7 @@ public partial class HudWindow:Window
         }
         menu.Items.Add(hudItem);
         var modeMenu=new MenuItem{Header="输入模式",HeaderTemplate=headerTemplate};foreach(var value in Enum.GetValues<InputMode>()){var item=Item(value==InputMode.Smart?"智能模式":value==InputMode.Manual?"精确手动":"连续目标",()=>{while(c.State.Mode!=value)c.Act("mode");});item.IsCheckable=true;item.IsChecked=c.State.Mode==value;modeMenu.Items.Add(item);}menu.Items.Add(modeMenu);
-        var mapMenu=new MenuItem{Header="地图",HeaderTemplate=headerTemplate};foreach(var id in GameMaps.Ids){var item=Item(GameMaps.Name(id),()=>c.State.SelectMap(id));item.IsCheckable=true;item.IsChecked=c.State.Map==id;mapMenu.Items.Add(item);}menu.Items.Add(mapMenu);
+        var mapMenu=new MenuItem{Header="地图",HeaderTemplate=headerTemplate};foreach(var id in GameMaps.Ids){var item=Item(GameMaps.Name(id),()=>{c.Ocr.CancelForInput();c.State.SelectMap(id);});item.IsCheckable=true;item.IsChecked=c.State.Map==id;mapMenu.Items.Add(item);}menu.Items.Add(mapMenu);
         var weaponMenu=new MenuItem{Header="炮种",HeaderTemplate=headerTemplate};foreach(var (id,label) in new[]{("mortar","迫击炮"),("spg","SPH-2")}){var item=Item(label,()=>{if(c.State.Weapon!=id)c.Act("weapon");});item.IsCheckable=true;item.IsChecked=c.State.Weapon==id;weaponMenu.Items.Add(item);}menu.Items.Add(weaponMenu);
         menu.Items.Add(new Separator());Add("手动输入坐标",()=>OpenSettings("tools"));Add("本次记录 / 恢复坐标",()=>OpenSettings("history"));
         if(c.Pref.EnableTestFeatures){Add("联机房间 / 成员列表",()=>OpenSettings("room"));Add("发布任务 / 取消等待",()=>c.Act("publishTask"),c.Pref.Keys.GetValueOrDefault("publishTask"));Add("选择房间任务",()=>c.Act("roomTasks"),c.Pref.Keys.GetValueOrDefault("roomTasks"));}
@@ -188,14 +188,15 @@ public partial class HudWindow:Window
     {
         var p=Card(390);var top=new StackPanel{Orientation=Orientation.Horizontal,Margin=new Thickness(0,0,0,8)};
         top.Children.Add(Btn("返回界面",()=>SetForm(backForm),primary:true));top.Children.Add(Btn("大地图",()=>c.ShowMap()));top.Children.Add(Btn("点化",()=>SetForm("bubble")));p.Children.Add(top);
-        var tabs=new StackPanel{Orientation=Orientation.Horizontal,Margin=new Thickness(0,0,0,10)};var body=new Grid();
+        var tabs=new WrapPanel{Margin=new Thickness(0,0,0,10)};var body=new Grid();
         var config=new SettingsPanel(c,true);var configScroll=new ScrollViewer{Content=config,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,MaxHeight=420};var manual=new StackPanel();positions=Text("",12,muted);positions.LineHeight=23;manual.Children.Add(Back(positions));
         var input=new TextBox{Margin=new Thickness(0,12,0,8),ToolTip="x12.11 y11.11，可带尾随文字"};manual.Children.Add(input);
         var buttons=new StackPanel{Orientation=Orientation.Horizontal};buttons.Children.Add(Btn("设为炮位",()=>c.Manual(input.Text,true)));buttons.Children.Add(Btn("设为目标",()=>c.Manual(input.Text,false),primary:true));manual.Children.Add(buttons);
         var exit=Btn("退出应用",()=>c.Quit());exit.Margin=new Thickness(0,12,0,0);manual.Children.Add(exit);
         void Tab(UIElement child){c.IsRecordingHotkey=false;body.Children.Clear();body.Children.Add(child);}
-        tabs.Children.Add(Btn("快捷键 / 外观",()=>Tab(configScroll)));tabs.Children.Add(Btn("坐标 / 工具",()=>Tab(manual)));tabs.Children.Add(Btn("本次记录",()=>Tab(new HistoryPanel(c){Height=420})));if(c.Pref.EnableTestFeatures)tabs.Children.Add(Btn("联机",()=>Tab(new ScrollViewer{Content=new WarDogs.Multiplayer.RoomSettingsPanel(c),MaxHeight=420,VerticalScrollBarVisibility=ScrollBarVisibility.Auto})));p.Children.Add(tabs);
-        Tab(settingsTab=="history"?new HistoryPanel(c){Height=420}:settingsTab=="tools"?manual:settingsTab=="room"&&c.Pref.EnableTestFeatures?new ScrollViewer{Content=new WarDogs.Multiplayer.RoomSettingsPanel(c),MaxHeight=420,VerticalScrollBarVisibility=ScrollBarVisibility.Auto}:configScroll);settingsTab="config";p.Children.Add(body);
+        ScrollViewer OcrPanel()=>new(){Content=new DeepSeekOcrPanel(c),MaxHeight=420,VerticalScrollBarVisibility=ScrollBarVisibility.Auto};
+        tabs.Children.Add(Btn("快捷键 / 外观",()=>Tab(configScroll)));tabs.Children.Add(Btn("坐标 / 工具",()=>Tab(manual)));tabs.Children.Add(Btn("本次记录",()=>Tab(new HistoryPanel(c){Height=420})));tabs.Children.Add(Btn("DeepSeek OCR",()=>Tab(OcrPanel())));if(c.Pref.EnableTestFeatures)tabs.Children.Add(Btn("联机",()=>Tab(new ScrollViewer{Content=new WarDogs.Multiplayer.RoomSettingsPanel(c),MaxHeight=420,VerticalScrollBarVisibility=ScrollBarVisibility.Auto})));p.Children.Add(tabs);
+        Tab(settingsTab=="history"?new HistoryPanel(c){Height=420}:settingsTab=="tools"?manual:settingsTab=="ocr"?OcrPanel():settingsTab=="room"&&c.Pref.EnableTestFeatures?new ScrollViewer{Content=new WarDogs.Multiplayer.RoomSettingsPanel(c),MaxHeight=420,VerticalScrollBarVisibility=ScrollBarVisibility.Auto}:configScroll);settingsTab="config";p.Children.Add(body);
         notice=Text("",10,blue);notice.TextWrapping=TextWrapping.Wrap;var footer=Back(notice);footer.Margin=new Thickness(0,10,0,0);p.Children.Add(footer);
     }
     void Render()
@@ -204,7 +205,7 @@ public partial class HudWindow:Window
         var s=c.State;var r=c.Result;var display=c.PzhDisplay;var corrected=display?.Active==true?display.Corrected:null;var color=s.Paused?muted:s.Waiting!=Awaiting.None||r is {InRange:false}?amber:blue;
         if(distance!=null)distance.Text=r?.Distance.ToString("0")??"—";if(azimuth!=null)azimuth.Text=corrected?.Azimuth.ToString("0.0")??r?.Azimuth?.ToString("0.0")??"—";
         if(mil!=null){mil.Text=r==null?"—":s.Weapon=="mortar"?r.Single?.ToString()??"—":corrected!=null?RoundMil(corrected.Mil):$"{r.Low?.ToString()??"—"}/{r.High?.ToString()??"—"}";mil.FontSize=s.Weapon=="mortar"?(Form=="compact"?27:30):corrected!=null?(Form=="compact"?27:30):17;mil.Foreground=r is {InRange:false}?amber:blue;mil.ToolTip=s.Weapon=="spg"?(corrected!=null?"校准补偿后的高抛密位":"低抛 / 高抛"):"迫击炮仰角";}
-        if(status!=null){status.Text=Form=="bubble"?s.Paused?"Ⅱ":s.Waiting==Awaiting.Origin?"炮":s.Waiting==Awaiting.Target?"靶":"":$"● {s.Status} · {r?.Status??"等待坐标"}";status.Foreground=color;status.ToolTip=$"{s.Status} · {r?.Status??"等待坐标"}\n{c.Notices.FirstOrDefault()}";}
+        if(status!=null){status.Text=Form=="bubble"?s.Paused?"Ⅱ":s.Waiting==Awaiting.Origin?"炮":s.Waiting==Awaiting.Target?"靶":"":$"● {s.Status} · {r?.Status??"等待坐标"}";status.Foreground=color;status.ToolTip=$"{s.Status} · {r?.Status??"等待坐标"}\n{c.Ocr.StatusText??c.Notices.FirstOrDefault()}";}
         if(bubbleDot!=null){bubbleDot.Fill=color;bubbleDot.Visibility=s.Paused||s.Waiting!=Awaiting.None?Visibility.Collapsed:Visibility.Visible;} if(weapon!=null)weapon.Content=(s.Weapon=="mortar"?"迫击炮":"SPH-2")+(Form=="compact"?"":" ↻");
         if(calibrationButton!=null){calibrationButton.Visibility=s.Weapon=="spg"?Visibility.Visible:Visibility.Collapsed;calibrationButton.Content=c.PzhCalibrationLabel;calibrationButton.Foreground=c.PzhCalibrationLabel=="需重置校准"?amber:ink;}
         if(reloadStatus!=null){var visible=c.Pref.PzhReload.Enabled&&s.Weapon=="spg";reloadStatus.Text=$"自动装弹 · {c.Reload.Status} · 识别 {c.Reload.LastSequence}";reloadStatus.Foreground=blue;if(reloadStatus.Parent is Border reloadBack)reloadBack.Visibility=visible?Visibility.Visible:Visibility.Collapsed;}
@@ -215,7 +216,7 @@ public partial class HudWindow:Window
             var stateColor=(Color)ColorConverter.ConvertFromString(s.Waiting==Awaiting.Origin?"#A97822":"#232E40");
             originBrush.Color=Color.FromArgb(originBrush.Color.A,stateColor.R,stateColor.G,stateColor.B);origin.BorderBrush=Brushes.Transparent;origin.BorderThickness=new Thickness(1);
         }
-        var entry=c.History.FirstOrDefault();if(notice!=null){notice.Text=Form=="settings"?entry?.FullText??"":entry==null?"本次暂无记录":entry.Title+TowerSuffix(entry.Proximity);notice.Foreground=entry==null?muted:Brush(entry.Color);}
+        var entry=c.History.FirstOrDefault();if(notice!=null){notice.Text=c.Ocr.StatusText??(Form=="settings"?entry?.FullText??"":entry==null?"本次暂无记录":entry.Title+TowerSuffix(entry.Proximity));notice.Foreground=c.Ocr.StatusText!=null?blue:entry==null?muted:Brush(entry.Color);}
         if(latest!=null)latest.ToolTip=entry?.Hint??"暂无记录";
         if(hiddenKey!=null){var key=c.Pref.Keys.GetValueOrDefault("hud","");hiddenKey.Text=key.Length>0?"隐藏 / 显示 HUD  "+key:"隐藏 / 显示 HUD：未绑定快捷键";}
         if(positions!=null)positions.Text=$"炮位  {s.Current.Origin?.ToString()??"未设置"}\n目标  {s.Current.Target?.ToString()??"未设置"}\n来源  {s.Current.Source}";
@@ -231,7 +232,7 @@ public partial class HudWindow:Window
     }
     bool IsControl(DependencyObject? node)
     {
-        while(node!=null&&node!=Surface){if(node is ButtonBase or TextBoxBase or Slider or ScrollBar or ComboBox or ListBoxItem)return true;node=node is Visual?VisualTreeHelper.GetParent(node):LogicalTreeHelper.GetParent(node);}return false;
+        while(node!=null&&node!=Surface){if(node is ButtonBase or TextBoxBase or PasswordBox or Slider or ScrollBar or ComboBox or ListBoxItem)return true;node=node is Visual?VisualTreeHelper.GetParent(node):LogicalTreeHelper.GetParent(node);}return false;
     }
     void PointerDown(object sender,MouseButtonEventArgs e)
     {

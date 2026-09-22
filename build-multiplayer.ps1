@@ -20,6 +20,8 @@ try {
 } finally { Pop-Location }
 & $sdk run --project "$projectRoot/tests/CoreTests.csproj" -- "$projectRoot/src/Data/weapons.json"
 if ($LASTEXITCODE -ne 0) { throw 'Core tests failed' }
+& $sdk run --project "$projectRoot/ocr-tests/OcrTests.csproj" -c Release
+if ($LASTEXITCODE -ne 0) { throw 'OCR tests failed' }
 & $sdk run --project "$projectRoot/update-tests/UpdateTests.csproj" -c Release
 if ($LASTEXITCODE -ne 0) { throw 'Update tests failed' }
 node "$projectRoot/tests/upstream-parity.cjs" "$projectRoot/src/Data"

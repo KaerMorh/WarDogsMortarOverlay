@@ -8,6 +8,7 @@
   <ItemGroup><Content Include="Data\**;Web\**" CopyToOutputDirectory="PreserveNewest" /></ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="update-public.pem" LogicalName="WarDogs.UpdatePublicKey" />
+    <EmbeddedResource Include="Assets\ocr-test-map.png" LogicalName="WarDogs.OcrTestMap" />
     <Content Include="ApplyUpdate.ps1" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

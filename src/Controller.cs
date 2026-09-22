@@ -23,6 +23,7 @@ public class Preferences
     public MultiplayerPreferences Multiplayer{get;set;}=new();
     public PzhCalibrationSettings Pzh{get;set;}=new();
     public PzhReloadSettings PzhReload{get;set;}=new();
+    public DeepSeekOcrSettings DeepSeekOcr{get;set;}=new();
     public bool AutoCheckUpdates{get;set;}=true;
     public bool EnableTestFeatures{get;set;}
     public Session Session{get;set;}=new();
@@ -41,7 +42,7 @@ public class Controller
     public static readonly string Root=AppContext.BaseDirectory;
     public static readonly string UserDir=Path.Combine(Root,"UserData");
     public static readonly JsonSerializerOptions Json=new(){PropertyNamingPolicy=JsonNamingPolicy.CamelCase,WriteIndented=true};
-    public static readonly Dictionary<string,string> Actions=new(){{"origin","炮位设置"},{"target","目标选定"},{"pause","停止 / 恢复"},{"hud","隐藏 / 显示 HUD"},{"mode","模式切换"},{"map","地图切换"},{"publishTask","发布任务 / 取消等待"},{"roomTasks","任务菜单 / 关闭"},{"roomPrevious","任务菜单 · 上一条"},{"roomNext","任务菜单 · 下一条"},{"roomConfirm","任务菜单 · 确认"},{"roomCancel","任务菜单 · 取消"}};
+    public static readonly Dictionary<string,string> Actions=new(){{"origin","炮位设置"},{"target","目标选定"},{"ocrOrigin","DeepSeek OCR · 设炮位"},{"ocrTarget","DeepSeek OCR · 选目标"},{"pause","停止 / 恢复"},{"hud","隐藏 / 显示 HUD"},{"mode","模式切换"},{"map","地图切换"},{"publishTask","发布任务 / 取消等待"},{"roomTasks","任务菜单 / 关闭"},{"roomPrevious","任务菜单 · 上一条"},{"roomNext","任务菜单 · 下一条"},{"roomConfirm","任务菜单 · 确认"},{"roomCancel","任务菜单 · 取消"}};
     public Session State{get;private set;}
     public Ballistics Calculator{get;}
     public MainWindow Main=null!;public HudWindow Hud=null!;
@@ -52,6 +53,7 @@ public class Controller
     public TaskPickerWindow? TaskPicker{get;private set;}
     public PzhCalibrationWindow? PzhCalibrationWindow{get;private set;}
     public PzhReloadService Reload{get;}
+    public DeepSeekOcrService Ocr{get;}
     public void ShowPzhCalibration()
     {
         if(PzhCalibrationWindow!=null){PzhCalibrationWindow.Show();PzhCalibrationWindow.Activate();return;}
@@ -91,6 +93,7 @@ public class Controller
     public bool IsClosing=>closing;
     public bool IsRecordingHotkey{get;set;}
     public event Action<string>? HotkeyRecorded;
+    public event Action? HotkeysChanged;
     DispatcherTimer saveTimer=new(){Interval=TimeSpan.FromMilliseconds(700)};
     public Controller(bool demo)
     {
@@ -99,8 +102,9 @@ public class Controller
         Pref.Multiplayer??=new();
         Pref.Pzh??=new();Pref.Pzh.Shots??=[];Pref.Pzh.LinearShots??=[];
         Pref.PzhReload??=new();Pref.PzhReload.Normalize();
+        Pref.DeepSeekOcr??=new();Pref.DeepSeekOcr.Normalize();
         if(Pref.Multiplayer.Role is not ("gunner" or "scout"))Pref.Multiplayer.Role="gunner";
-        foreach(var (action,key) in new[]{("publishTask","Ctrl+Alt+3"),("roomTasks","Ctrl+Alt+T"),("roomPrevious","Ctrl+Alt+Up"),("roomNext","Ctrl+Alt+Down"),("roomConfirm","Ctrl+Alt+Enter"),("roomCancel","Ctrl+Alt+Escape")})Pref.Keys.TryAdd(action,key);
+        foreach(var (action,key) in new[]{("ocrOrigin","Ctrl+1"),("ocrTarget","Ctrl+2"),("publishTask","Ctrl+Alt+3"),("roomTasks","Ctrl+Alt+T"),("roomPrevious","Ctrl+Alt+Up"),("roomNext","Ctrl+Alt+Down"),("roomConfirm","Ctrl+Alt+Enter"),("roomCancel","Ctrl+Alt+Escape")})Pref.Keys.TryAdd(action,key);
         State=Pref.Session;
         if(!Enum.IsDefined(State.Mode))State.Mode=InputMode.Smart;
         if(!GameMaps.Valid(State.Map))State.Map="bakurani";
@@ -114,6 +118,7 @@ public class Controller
                 .Select(x=>new TowerInfo(x.GetProperty("label").GetString()!,new(x.GetProperty("x").GetDouble()/100,x.GetProperty("y").GetDouble()/100))).ToArray();
         }
         Reload=new PzhReloadService(this);
+        Ocr=new DeepSeekOcrService(this);Ocr.Changed+=()=>Updated?.Invoke();
         State.Notice+=Notify;State.Changed+=()=>{ResetPzhForCurrentOrigin();Reload.CheckConditions();Refresh();};State.PositionUpdated+=p=>
         {
             if(Dragging&&p.Source=="地图")dragUpdate=p;else RecordPosition(p);
@@ -186,13 +191,13 @@ public class Controller
             if(shared.Status!=before)History[i]=History[i] with {};
         }
     }
-    public void CancelInputForRoomSelection(){requestRevision++;Pending=null;dragUpdate=null;Rooms.Capture.Cancel();}
+    public void CancelInputForRoomSelection(){Ocr.CancelForInput();requestRevision++;Pending=null;dragUpdate=null;Rooms.Capture.Cancel();}
     void RecordPosition(PositionUpdate p){AddHistory(new(DateTime.Now,"",p,TowerProximity.Describe(p.Coordinate,Towers[p.Map])));Updated?.Invoke();}
     public void RestoreHistory(HistoryEntry entry)
     {
         if(entry.Shared is {} shared){Rooms.Select(shared.Point,"房间历史恢复");return;}
         if(entry.Position is not {} p)return;
-        requestRevision++;Pending=null;dragUpdate=null;
+        Ocr.CancelForInput();requestRevision++;Pending=null;dragUpdate=null;
         if(State.Map!=p.Map)State.SelectMap(p.Map);
         if(p.Role==Awaiting.Origin)State.SetOrigin(p.Coordinate,"历史恢复");else State.SetTarget(p.Coordinate,"历史恢复");
     }
@@ -215,10 +220,11 @@ public class Controller
     }
     public async void Act(string action)
     {
+        if(action=="ocrOrigin"){Ocr.Start(true);return;}if(action=="ocrTarget"){Ocr.Start(false);return;}
         requestRevision++;
         if(!Pref.EnableTestFeatures&&action is "publishTask" or "roomTasks" or "roomPrevious" or "roomNext" or "roomConfirm" or "roomCancel")
         {Notify("请先在设置第一页开启测试功能");return;}
-        if(action is "origin" or "target" or "pause" or "map" or "mode"){Rooms.Capture.Cancel();CancelPzhCoordinateCapture(false);}
+        if(action is "origin" or "target" or "pause" or "map" or "mode" or "weapon"){Ocr.CancelForInput();Rooms.Capture.Cancel();CancelPzhCoordinateCapture(false);}
         switch(action)
         {
             case "publishTask":Rooms.TogglePublish(GetClipboardSequenceNumber());break;
@@ -238,7 +244,7 @@ public class Controller
             case "weapon":Reload.Cancel("炮种已切换");State.ChangeWeapon();break;
             case "bubble":Hud.SetForm("bubble");break;
             case "compact":Hud.SetForm("compact");break;
-            case "pending":if(Pending is {} p){Pending=null;if(pendingRole==Awaiting.Origin)State.SetOrigin(p);else State.SetTarget(p);Refresh();}break;
+            case "pending":if(Pending is {} p){Ocr.CancelForInput();Pending=null;if(pendingRole==Awaiting.Origin)State.SetOrigin(p);else State.SetTarget(p);Refresh();}break;
             case "discard":Pending=null;Refresh();break;
         }
     }
@@ -283,7 +289,7 @@ public class Controller
         if(State.Paused||State.Mode==InputMode.Manual||(State.Mode==InputMode.Smart&&State.Waiting==Awaiting.None))return;
         int revision=++requestRevision;var read=await ReadClipboard(revision);if(!read.Current)return;
         if(Dragging){if(read.Coord!=null){Pending=read.Coord;pendingRole=State.Waiting;Notify("地图拖动中收到坐标 · 可选择采用或忽略");}return;}
-        State.OnClipboard(read.Coord);
+        if(read.Coord!=null)Ocr.CancelForInput();State.OnClipboard(read.Coord);
     }
     IntPtr WndProc(IntPtr h,int msg,IntPtr w,IntPtr l,ref bool handled)
     {
@@ -302,7 +308,8 @@ public class Controller
             }catch{Notify("快捷键格式无效 · 使用 Ctrl+Alt+1 等格式");return false;}
             // WPF ModifierKeys and Win32 MOD_* use the same bit assignments.
             if(registered.Any(x=>x.Key!=action&&x.Value==(mod,key))){Notify("快捷键重复 · 原绑定保留");return false;}
-            if(IsTaskMenuAction(action)&&!taskMenuHotkeys){Pref.Keys[action]=input;if(feedback){Notify("任务菜单快捷键已保存 · 菜单打开时启用");Save();}return true;}
+            if(IsTaskMenuAction(action)&&!taskMenuHotkeys){Pref.Keys[action]=input;if(feedback){Notify("任务菜单快捷键已保存 · 菜单打开时启用");Save();HotkeysChanged?.Invoke();}return true;}
+            if((action is "ocrOrigin" or "ocrTarget")&&!Pref.DeepSeekOcr.Enabled){foreach(var old in hotkeys.Where(x=>x.Value==action).ToArray()){UnregisterHotKey(handle,old.Key);hotkeys.Remove(old.Key);}registered.Remove(action);Pref.Keys[action]=input;if(feedback){Notify($"{Actions[action]}：{(input.Length==0?"已清除":"已保存，开启 OCR 后生效")}");Save();HotkeysChanged?.Invoke();}return true;}
             if(registered.TryGetValue(action,out var existing)&&existing==(mod,key)){if(feedback)Notify("快捷键未改变");return true;}
             int id=nextId++;
             if(!RegisterHotKey(handle,id,mod|0x4000,key)){Notify($"{Actions[action]}：快捷键被占用 · 原绑定保留");return false;}
@@ -310,21 +317,24 @@ public class Controller
             hotkeys[id]=action;registered[action]=(mod,key);
         }
         else{foreach(var old in hotkeys.Where(x=>x.Value==action).ToArray()){UnregisterHotKey(handle,old.Key);hotkeys.Remove(old.Key);}registered.Remove(action);}
-        Pref.Keys[action]=input;if(feedback){Notify(input.Length==0?"快捷键已清除":$"{Actions[action]}：{input}");Save();}return true;
+        Pref.Keys[action]=input;if(feedback){Notify(input.Length==0?"快捷键已清除":$"{Actions[action]}：{input}");Save();HotkeysChanged?.Invoke();}return true;
     }
+    public void SetOcrEnabled(bool enabled){Pref.DeepSeekOcr.Enabled=enabled;if(!enabled)Ocr.Cancel(false);foreach(var action in new[]{"ocrOrigin","ocrTarget"})Bind(action,Pref.Keys.GetValueOrDefault(action,""),false);Save();HotkeysChanged?.Invoke();Refresh();}
+    public void ClearPendingInput(){Pending=null;dragUpdate=null;}
     public void Manual(string text,bool origin)
     {
-        Rooms.Capture.Cancel();
+        Ocr.CancelForInput();Rooms.Capture.Cancel();
         requestRevision++;var c=Coordinates.Parse(text,true);if(c==null){Notify("未识别到唯一有效坐标 · 支持 x12.11 y11.11");return;}
         if(origin)State.SetOrigin(c,"手动");else State.SetTarget(c,"手动");
     }
     public void MapPoint(Coord c,bool origin)
     {
         if(!double.IsFinite(c.X)||!double.IsFinite(c.Y)||c.X<-.03||c.X>163.81||c.Y<-.01||c.Y>163.83)return;
+        Ocr.CancelForInput();
         if(origin)State.SetOrigin(c,"地图");else State.SetTarget(c,"地图",true);
     }
     public void ShowMap(){Main.ShowMapPage(this,new RoutedEventArgs());Main.Show();Main.WindowState=WindowState.Normal;Main.Activate();}
-    public async void Quit(){if(closing)return;PzhCalibrationWindow?.Close();if(PzhCalibrationWindow!=null)return;closing=true;Reload.Dispose();Save();TaskPicker?.Close();await Rooms.ShutdownAsync();RemoveClipboardFormatListener(handle);foreach(var id in hotkeys.Keys)UnregisterHotKey(handle,id);source?.RemoveHook(WndProc);Application.Current.Shutdown();}
+    public async void Quit(){if(closing)return;PzhCalibrationWindow?.Close();if(PzhCalibrationWindow!=null)return;closing=true;Ocr.Dispose();Reload.Dispose();Save();TaskPicker?.Close();await Rooms.ShutdownAsync();RemoveClipboardFormatListener(handle);foreach(var id in hotkeys.Keys)UnregisterHotKey(handle,id);source?.RemoveHook(WndProc);Application.Current.Shutdown();}
     [DllImport("user32.dll")]static extern bool AddClipboardFormatListener(IntPtr h);
     [DllImport("user32.dll")]static extern bool RemoveClipboardFormatListener(IntPtr h);
     [DllImport("user32.dll")]static extern uint GetClipboardSequenceNumber();

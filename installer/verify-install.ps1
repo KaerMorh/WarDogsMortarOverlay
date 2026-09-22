@@ -14,7 +14,8 @@ try {
   Check (!(Test-Path "$testDir/UserData")) 'package excludes personal settings and cache'
   Check (!(Test-Path "$testDir/Verification")) 'package excludes developer verification files'
   Check ((Get-FileHash "$testDir/WarDogsOverlay.dll").Hash -eq (Get-FileHash "$projectRoot/app/WarDogsOverlay.dll").Hash) 'installed application matches release build'
-  Check ((Get-ChildItem "$testDir/Web/maps/tiles" -File -Recurse).Count -eq 682) 'both offline maps installed completely'
+  $sourceTileCount=(Get-ChildItem "$projectRoot/src/Web/maps/tiles" -File -Recurse).Count
+  Check ((Get-ChildItem "$testDir/Web/maps/tiles" -File -Recurse).Count -eq $sourceTileCount) 'offline maps installed completely'
   Start-Process "$testDir/WarDogsOverlay.exe" -ArgumentList '--verify' -WindowStyle Hidden
   $result="$testDir/Verification/integration.txt"
   for($n=0;$n -lt 200 -and !(Test-Path $result);$n++){Start-Sleep -Milliseconds 200}
